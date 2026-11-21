@@ -10,6 +10,7 @@ A read-only LibreNMS plugin for investigating flow telemetry collected by Akvora
 - Fixed-time incident links that preserve the investigation filters. An optional link opens Akvorado Visualize with the same time window and flow filter.
 - Exporter diagnostics with query status, the latest nonzero flow bucket in the selected window, and the shares of observed L3 traffic with unknown ingress or egress.
 - An all-ports visibility table with each port’s latest SNMP rates and named ingress and egress observations in the selected window.
+- Historical overlays compare a selected port’s SNMP rates and Akvorado L2 estimates in shared ingress and egress time buckets.
 - Selected-port SNMP counter history aligned to the investigation window, including traffic, errors, and discards. Flow-to-counter coverage estimates are available for comparable L2 traffic queries.
 - A paginated exporter inventory and an optional API for supplying LibreNMS interface metadata to Akvorado.
 
@@ -54,6 +55,10 @@ Use **Copy incident link** on the Akvorado tab to share the time window shown on
 
 Enable AKVORADO_FLOW_SHOW_LINK to open the scoped window directly in Akvorado Visualize. The configured Console URL must be reachable by the user's browser. The scoped link uses Akvorado's v1 visualization URL format, verified with v2026.10.1.
 
+## Compare historical SNMP and flow traffic
+
+Select a port on the Akvorado device tab and open **Historical overlay**. Separate ingress and egress charts compare the latest selected window using the same time intervals in bits per second. The view reads LibreNMS RRD history and compares it with Akvorado L2 estimates for the selected port’s full traffic. Akvorado’s zero values are estimates with no matching sampled traffic. Missing readings and partially covered intervals remain gaps. Expand the values table to inspect a bucket.
+
 ## Check port visibility
 
 Open **Port visibility** from the device’s Akvorado tab to see all ports on one page. The table shows the latest LibreNMS SNMP rates and whether Akvorado reported each exact interface name in ingress and egress during the displayed window. Select a port name to investigate it over the same window.
@@ -90,6 +95,7 @@ for suite in tests/*.php; do
 done
 node tests/sankey-render.js
 node tests/incident-sharing.js
+node tests/historical-overlay-render.js
 ~~~
 
 Set LIBRENMS_ROOT to run view tests against an installed LibreNMS environment. Set AKVORADO_TEST_DEVICE_ID to render the investigation view with a device that has flows. A read-only selected-port diagnostic is available separately:

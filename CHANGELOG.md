@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.21
+
+- Add a historical SNMP and Akvorado L2 overlay for a selected port with aligned averages and gaps for missing data.
+
 ## v0.7.20
 
 - Show all device ports on a single visibility page. Keep collector requests batched and preserve SNMP rows when flow checks are unavailable.

@@ -164,7 +164,7 @@ final class FlowFormatter
         return $result;
     }
 
-    private static function unixTime(mixed $value): ?int
+    public static function unixTime(mixed $value): ?int
     {
         if (is_numeric($value)) {
             $n = (int) $value;
