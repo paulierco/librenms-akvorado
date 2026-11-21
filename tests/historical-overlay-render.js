@@ -18,8 +18,8 @@ class Context {
     beginPath() { this.path=[]; }
     moveTo(){ this.path.push('move'); }
     lineTo(){ this.path.push('line'); }
-    setLineDash() {}
-    stroke(){ strokes.push({color:this.strokeStyle, path:this.path}); }
+    setLineDash(dashes) { this.dashes=dashes; }
+    stroke(){ strokes.push({color:this.strokeStyle, path:this.path, dashes:this.dashes}); }
 }
 const context=new Context();
 const handlers={};
@@ -86,3 +86,24 @@ handlers.mousemove({clientX:65,clientY:25});
 assert.match(tooltip.textContent,/Unknown ingress: 0%/);
 assert.match(tooltip.textContent,/Unknown egress: 1\.23%/);
 console.log('PASS exporter history uses a fixed percent scale and distinguishes gaps from 0%');
+
+chartName='history_in';
+payload={in:{
+    ...chart,
+    series:[
+        {label:'Port A SNMP', values:[200,75,100], colorIndex:0},
+        {label:'Port A Akvorado L2', values:[50,24,55], colorIndex:0, dashed:true},
+        {label:'Port B SNMP', values:[100,25,30], colorIndex:2},
+        {label:'Port B Akvorado L2', values:[20,10,20], colorIndex:2, dashed:true}
+    ]
+}};
+strokes.length=0;
+vm.runInNewContext(script,{document,window:{addEventListener(){}},getComputedStyle:()=>({getPropertyValue:()=>''})});
+const traces=strokes.filter(({path})=>path.length===3);
+assert.equal(traces.length,4);
+assert.equal(traces[0].color,traces[1].color);
+assert.equal(traces[2].color,traces[3].color);
+assert.notEqual(traces[0].color,traces[2].color);
+assert.equal(traces[1].dashes.length,2);
+assert.equal(traces[3].dashes.length,2);
+console.log('PASS port comparison traces share each port color and distinguish flow estimates');

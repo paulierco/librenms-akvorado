@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LibreNMS\Plugins\AkvoradoFlow\Tabs;
 
 use App\Models\Device;
+use App\Models\Port;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use LibreNMS\Interfaces\UI\DeviceTab;
@@ -33,23 +34,19 @@ final class AkvoradoTab implements DeviceTab
         Gate::authorize('view', $device);
         abort_unless($this->visible($device), 404);
 
-        $port = null;
-        $portId = $request->query('port');
-        if ($portId !== null && (string) $portId !== '') {
-            abort_unless(ctype_digit((string) $portId) && (int) $portId > 0, 404);
-            $port = $device->ports()->where('port_id', (int) $portId)->first();
-            abort_unless($port !== null, 404);
-            Gate::authorize('view', $port);
-        }
-        $period = $request->query('period', (string) config('akvorado-flow.window_minutes', 60));
+        $port = $this->authorizedPort($device, $request->query('port'));
+        $section = $request->query('section');
+        $lookback = $request->query('comparison_lookback');
+        $rollingComparison = $section === 'port-comparison' && is_string($lookback) && ctype_digit($lookback);
+        $period = $rollingComparison ? $lookback : $request->query('period', (string) config('akvorado-flow.window_minutes', 60));
         $minutes = FlowQuery::window(is_scalar($period) ? (int) $period : 60);
         $metric = FlowQuery::metric(is_string($request->query('metric')) ? $request->query('metric') : 'l3bps');
         $dimension = FlowQuery::dimension(is_string($request->query('dimension')) ? $request->query('dimension') : 'SrcAddr');
         // Only narrow validated fields reach Akvorado; malformed user filters are rejected.
         try {
             $focus = FlowQuery::focus($request->query());
-            $bounds = FlowQuery::bounds($request->query('start'), $request->query('end'));
-            if ($bounds === null && $request->query('alert_at') !== null) {
+            $bounds = $rollingComparison ? null : FlowQuery::bounds($request->query('start'), $request->query('end'));
+            if (! $rollingComparison && $bounds === null && $request->query('alert_at') !== null) {
                 if ($port === null) {
                     throw new \InvalidArgumentException('An alert investigation requires a port');
                 }
@@ -81,6 +78,24 @@ final class AkvoradoTab implements DeviceTab
 
             return [
                 'historicalOverlay' => app(PortTrafficHistory::class)->forPort($device, $port, $minutes, $bounds),
+                'exporterReady' => false,
+                'selectedPort' => $port,
+                'period' => $minutes,
+                'bounds' => $bounds,
+            ];
+        }
+
+        if ($section === 'port-comparison') {
+            $second = $this->authorizedPort($device, $request->query('compare_port'));
+            $ports = $device->ports()->hasAccess(auth()->user())->orderBy('ifName')->orderBy('port_id')
+                ->get(['port_id', 'ifIndex', 'ifName', 'ifDescr', 'ifAlias']);
+            $same = $port !== null && $second !== null && $port->is($second);
+            $history = $port !== null && $second !== null && ! $same
+                ? app(PortTrafficHistory::class)->forComparison($device, $port, $second, $minutes, $bounds)
+                : null;
+
+            return [
+                'portComparison' => ['ports' => $ports, 'second' => $second, 'same' => $same, 'history' => $history],
                 'exporterReady' => false,
                 'selectedPort' => $port,
                 'period' => $minutes,
@@ -147,5 +162,18 @@ final class AkvoradoTab implements DeviceTab
             'layer2Options' => $layer2Options,
             'focus' => $focus, 'bounds' => $bounds,
         ];
+    }
+
+    private function authorizedPort(Device $device, mixed $id): ?Port
+    {
+        if ($id === null || $id === '') {
+            return null;
+        }
+        abort_unless(is_string($id) && ctype_digit($id) && (int) $id > 0 && (string)(int)$id === ltrim($id, '0'), 404);
+        $port = $device->ports()->where('port_id', (int)$id)->first();
+        abort_unless($port !== null, 404);
+        Gate::authorize('view', $port);
+
+        return $port;
     }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.25
+
+- Compare two ports on the same device over one time window. Overlay their ingress and egress SNMP and Akvorado L2 rates and show traffic shares across matched buckets.
+
 ## v0.7.24
 
 - Filter by IPv4 or IPv6 CIDR and add reported prefix, VLAN, and MAC grouping where the Console advertises those fields. VLAN and MAC filters appear for enabled schema fields.
