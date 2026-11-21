@@ -176,6 +176,31 @@ final class FlowFormatter
         catch (\Throwable) { return null; }
     }
 
+    /** Infer the bucket width on a timestamp grid that may contain missing slots. */
+    public static function bucketStep(array $timestamps): ?int
+    {
+        if (! array_is_list($timestamps) || count($timestamps) < 2) {
+            return null;
+        }
+        $previous = $timestamps[0];
+        $deltas = [];
+        foreach (array_slice($timestamps, 1) as $time) {
+            if (! is_int($previous) || ! is_int($time) || $time <= $previous) {
+                return null;
+            }
+            $deltas[] = $time - $previous;
+            $previous = $time;
+        }
+        $step = min($deltas);
+        foreach ($deltas as $delta) {
+            if ($delta % $step !== 0) {
+                return null;
+            }
+        }
+
+        return $step;
+    }
+
     private static function timeLabel(mixed $value): string
     {
         if (is_numeric($value)) {

@@ -33,7 +33,7 @@
                     @endif
                 </dd>
                 @if($diagnostics['state'] === 'observed')
-                    <dt>Latest flow bucket</dt>
+                    <dt>Latest flow bucket start</dt>
                     <dd>{{ gmdate('Y-m-d H:i:s', strtotime($diagnostics['lastBucket'])) }} UTC</dd>
                     @foreach($diagnostics['shares'] as $direction => $share)
                         <dt>Unknown {{ $direction }}</dt>
@@ -42,6 +42,7 @@
                 @endif
             </dl>
             @if($diagnostics['state'] === 'observed')
+                @include('akvorado-flow::device.tabs.exporter-health-history', ['history' => $diagnostics['history'] ?? null])
                 <p>An empty interface name can come from a missing exporter index or a metadata lookup failure. The Console name fields alone leave the cause undetermined.</p>
                 <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'section' => 'sankey'] + $windowParams) }}">Open Communications map</a>
             @elseif($diagnostics['state'] === 'no_flows')

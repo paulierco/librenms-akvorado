@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.23
+
+- Show exporter-wide unknown ingress and egress shares over time in Flow diagnostics, with exact bucket values and gaps for unavailable measurements.
+
 ## v0.7.22
 
 - Recheck leading IP conversations that rank in only one period to distinguish missed rankings, no sampled traffic, and unavailable rechecks.

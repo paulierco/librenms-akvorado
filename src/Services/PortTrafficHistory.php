@@ -101,7 +101,7 @@ final class PortTrafficHistory
             return [];
         }
         $times = array_map(FlowFormatter::unixTime(...), $times);
-        $step = self::step($times);
+        $step = FlowFormatter::bucketStep($times);
         if ($step === null) {
             return [];
         }
@@ -119,7 +119,7 @@ final class PortTrafficHistory
     public static function chart(array $snmp, array $flows, int $from, int $to): array
     {
         $times = $snmp['timestamps'] ?? [];
-        $snmpStep = self::step($times);
+        $snmpStep = FlowFormatter::bucketStep($times);
         $steps = array_filter([$snmpStep, $flows['in']['step'] ?? null, $flows['out']['step'] ?? null]);
         if ($steps === []) {
             return ['step' => null, 'charts' => []];
@@ -191,30 +191,6 @@ final class PortTrafficHistory
         }
 
         return $total / ($end - $from);
-    }
-
-    private static function step(array $timestamps): ?int
-    {
-        if (! array_is_list($timestamps) || count($timestamps) < 2) {
-            return null;
-        }
-        $previous = $timestamps[0];
-        $deltas = [];
-        foreach (array_slice($timestamps, 1) as $time) {
-            if (! is_int($previous) || ! is_int($time) || $time <= $previous) {
-                return null;
-            }
-            $deltas[] = $time - $previous;
-            $previous = $time;
-        }
-        $step = min($deltas);
-        foreach ($deltas as $delta) {
-            if ($delta % $step !== 0) {
-                return null;
-            }
-        }
-
-        return $step;
     }
 
     private static function rate(mixed $value): ?float

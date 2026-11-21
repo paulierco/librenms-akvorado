@@ -8,7 +8,7 @@ A read-only LibreNMS plugin for investigating flow telemetry collected by Akvora
 - An optional previous-period overlay for the same device, port, and filters. See the largest increases among conversations ranked in both windows and recheck up to eight leading IP pairs from each ranking that did not rank in the other window.
 - A communications map with interface, IP, and service views. The interface view can show only known paths or only paths with unknown ingress, with the excluded bitrate share shown alongside the diagram.
 - Fixed-time incident links that preserve the investigation filters. An optional link opens Akvorado Visualize with the same time window and flow filter.
-- Exporter diagnostics with query status, the latest nonzero flow bucket in the selected window, and the shares of observed L3 traffic with unknown ingress or egress.
+- Exporter diagnostics with query status, the latest nonzero flow bucket in the selected window, and historical shares of observed L3 traffic with unknown ingress or egress.
 - An all-ports visibility table with each port’s latest SNMP rates and named ingress and egress observations in the selected window.
 - Historical overlays compare a selected port’s SNMP rates and Akvorado L2 estimates in shared ingress and egress time buckets.
 - Selected-port SNMP counter history aligned to the investigation window, including traffic, errors, and discards. Flow-to-counter coverage estimates are available for comparable L2 traffic queries.
@@ -79,6 +79,7 @@ Use false for a plain-text template. The link uses the configured LibreNMS base 
 
 - The conversation recheck distinguishes a pair observed below the ranking cutoff, a successful query with no sampled traffic for that pair, and an unavailable recheck. Sampling and collector coverage affect all presence results.
 - Akvorado reports sampled flow observations. An interface name can be empty because the exporter omitted the interface index or because enrichment could not resolve it. The diagnostic shares use all observed exporter traffic in the selected window. The map’s shares use the ranked paths displayed in that view.
+- **Flow diagnostics** charts unknown ingress and egress shares in complete buckets. The values table includes each bucket’s observed L3 rate. A gap means no observed L3 traffic or an unavailable comparison.
 - A flow can be sampled at multiple points. SNMP counters and flow estimates use different observation and aggregation methods. A coverage percentage is an estimate and may differ from the interface’s polled counters.
 - Link-aggregate member links depend on the relationships LibreNMS has discovered in its port stack. Aggregate traffic may be attributed to physical members or to the logical interface by the exporter.
 - The exporter inventory shows both known exporters and addresses observed in a recent, bounded query. A missing address in that result can have several causes, including quiet traffic in the selected window.
