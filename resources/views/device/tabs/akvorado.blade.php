@@ -2,7 +2,7 @@
 
 @section('content')
     <x-device.page :device="$device">
-        <div class="row"><div class="col-md-12">
+        <div class="row" data-akv-device-tab><div class="col-md-12">
             <div class="panel panel-default" style="margin-top:12px">
                 <div class="panel-heading"><strong>Akvorado — Traffic Investigation</strong> <small class="text-muted">{{ $device->hostname }}</small></div>
                 <div class="panel-body">
@@ -41,8 +41,15 @@
                             <a href="{{ route('akvorado.exporters') }}" class="btn btn-default btn-sm"><i class="fa fa-list-alt"></i> Exporter inventory</a>
                         @endif
                     </div>
+                    @include('akvorado-flow::device.tabs.investigation-views')
                     @if($data['exporterReady'])
                     <form method="GET" action="{{ route('device.akvorado', ['device' => $device->device_id]) }}" class="form-inline akv-query-form" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+                        <input type="hidden" name="section" value="{{ $data['viewSettings']['section'] }}" data-akv-current-section>
+                        @foreach(['sankey_view', 'sankey_paths'] as $setting)
+                            @isset($data['viewSettings'][$setting])
+                                <input type="hidden" name="{{ $setting }}" value="{{ $data['viewSettings'][$setting] }}">
+                            @endisset
+                        @endforeach
                         <div class="form-group">
                             <label for="akv-port">Interface</label>
                             <select class="form-control" id="akv-port" name="port" style="min-width:250px;max-width:470px">
@@ -161,11 +168,8 @@
                     @endif
                     @if($data['bounds'])
                         <div class="alert alert-info" style="margin:12px 0 0">
-                            <strong>Zoomed window:</strong> {{ $data['bounds']['start']->format('Y-m-d H:i') }} – {{ $data['bounds']['end']->format('Y-m-d H:i') }} UTC.
-                            <a href="{{ route('device.akvorado', ['device'=>$device->device_id] + array_diff_key($data['panel']['queryArgs'] ?? [
-                                'period'=>$data['period'],'metric'=>$data['metric'],'dimension'=>$data['dimension'],
-                                'port'=>$data['selectedPort']->port_id ?? null,
-                            ] + $data['focus'], array_flip(['start','end']))) }}">Return to the selected preset</a>
+                            <strong>Fixed window</strong> {{ $data['bounds']['start']->format('Y-m-d H:i:s') }} – {{ $data['bounds']['end']->format('Y-m-d H:i:s') }} UTC.
+                            <a href="{{ route('device.akvorado', ['device' => $device->device_id] + array_diff_key($data['viewSettings'], ['start' => true, 'end' => true])) }}">Return to the selected preset</a>
                         </div>
                     @endif
                     <script>

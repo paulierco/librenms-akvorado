@@ -1,6 +1,6 @@
 # LibreNMS Akvorado
 
-A read-only LibreNMS plugin for investigating flow telemetry collected by Akvorado. Open a device’s **Akvorado** tab to see traffic, find conversations and top talkers, and compare what the collector observed with LibreNMS interface data.
+A LibreNMS plugin for investigating flow telemetry collected by Akvorado. Its telemetry queries are read-only. Open a device’s **Akvorado** tab to see traffic, find conversations and top talkers, and compare what the collector observed with LibreNMS interface data.
 
 ## Features
 
@@ -55,6 +55,14 @@ If LibreNMS uses cached configuration, rebuild or clear the configuration cache 
 Use **Copy incident link** on the Akvorado tab to share the time window shown on the page, including when the time range was originally a rolling preset. The link keeps the selected port, filters, and view and follows the same LibreNMS permissions and eight-day fixed-window lookback as graph zoom.
 
 Enable AKVORADO_FLOW_SHOW_LINK to open the scoped window directly in Akvorado Visualize. The configured Console URL must be reachable by the user's browser. The scoped link uses Akvorado's v1 visualization URL format, verified with v2026.10.1.
+
+## Use custom time ranges and saved views
+
+Open **Custom time range** on a device’s Akvorado tab and enter the start and end in UTC. The range can be 5 minutes to 7 days and must start within the last 8 days.
+
+Open **Saved views** and name the current investigation. A saved view keeps the selected port, filters, active section and rolling lookback. Select **Keep fixed UTC dates** to retain the current exact window. When those dates expire, the saved view opens using its saved rolling lookback. Views are private to your LibreNMS account and device.
+
+Saved views use LibreNMS’s existing user preferences table. Complete the normal LibreNMS database migrations so the preference value can hold the saved settings.
 
 ## Compare historical SNMP and flow traffic
 
