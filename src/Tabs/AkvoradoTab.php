@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Gate;
 use LibreNMS\Interfaces\UI\DeviceTab;
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowDiagnostics;
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowQuery;
+use LibreNMS\Plugins\AkvoradoFlow\Services\PortAlertInvestigation;
 use LibreNMS\Plugins\AkvoradoFlow\Services\TrafficService;
 
 final class AkvoradoTab implements DeviceTab
@@ -49,6 +50,12 @@ final class AkvoradoTab implements DeviceTab
                 'dst_port' => $request->query('dst_port'), 'proto' => $request->query('proto'),
             ]);
             $bounds = FlowQuery::bounds($request->query('start'), $request->query('end'));
+            if ($bounds === null && $request->query('alert_at') !== null) {
+                if ($port === null) {
+                    throw new \InvalidArgumentException('An alert investigation requires a port');
+                }
+                $bounds = PortAlertInvestigation::bounds($request->query('alert_at'));
+            }
         } catch (\InvalidArgumentException $e) {
             abort(422, 'Invalid Akvorado investigation filter or time range.');
         }

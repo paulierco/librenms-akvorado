@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.18
+
+- Link from port alert templates to the affected LibreNMS port and a window around the alert with previous-period comparison enabled.
+
+## v0.7.17
+
+- Added previous-period comparison and fixed-time incident sharing.
+
 ## v0.7.16
 
 - Added on-demand exporter diagnostics with query status, latest nonzero flow bucket, and unknown ingress and egress shares.
