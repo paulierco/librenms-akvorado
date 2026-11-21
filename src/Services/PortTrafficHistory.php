@@ -24,19 +24,63 @@ final class PortTrafficHistory
 
     public function forPort(Device $device, Port $port, int $minutes, ?array $bounds): array
     {
+        [$start, $end] = self::window($minutes, $bounds);
+        $ip = $this->resolver->resolve($device)['ip'] ?? null;
+        $samples = $this->samples($device, $port, $ip, $start, $end);
+
+        return self::chart($samples['snmp'], $samples['flows'], $start->getTimestamp(), $end->getTimestamp())
+            + ['start' => $start->getTimestamp(), 'end' => $end->getTimestamp(), 'exporterMapped' => $ip !== null];
+    }
+
+    public function forComparison(Device $device, Port $first, Port $second, int $minutes, ?array $bounds): array
+    {
+        [$start, $end] = self::window($minutes, $bounds);
+        $ip = $this->resolver->resolve($device)['ip'] ?? null;
+        $nameCounts = $ip === null ? [] : array_count_values($device->ports()
+            ->whereIn('ifName', [(string)$first->ifName, (string)$second->ifName])->pluck('ifName')
+            ->filter(static fn ($name) => is_string($name))->all());
+        $ports = [];
+        $ambiguous = [];
+        foreach ([$first, $second] as $port) {
+            $name = (string)$port->ifName;
+            $label = $name !== '' ? $name : ($port->ifDescr ?: 'Port '.$port->port_id);
+            $duplicate = ($nameCounts[$name] ?? 0) > 1;
+            if ($duplicate || (string)$first->ifName === (string)$second->ifName) {
+                $label .= ' (ifIndex '.$port->ifIndex.')';
+            }
+            if ($duplicate) {
+                $ambiguous[] = $label;
+            }
+            $ports[(int)$port->port_id] = ['label' => $label]
+                + $this->samples($device, $port, $duplicate ? null : $ip, $start, $end);
+        }
+
+        return self::comparisonChart($ports, $start->getTimestamp(), $end->getTimestamp())
+            + [
+                'start' => $start->getTimestamp(), 'end' => $end->getTimestamp(),
+                'exporterMapped' => $ip !== null, 'ambiguous' => $ambiguous, 'portLabels' => array_column($ports, 'label'),
+            ];
+    }
+
+    private static function window(int $minutes, ?array $bounds): array
+    {
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $end = $bounds['end'] ?? $now->setTime((int)$now->format('H'), (int)$now->format('i'));
         $start = $bounds['start'] ?? $end->modify('-'.$minutes.' minutes');
+
+        return [$start, $end];
+    }
+
+    private function samples(Device $device, Port $port, ?string $ip, DateTimeImmutable $start, DateTimeImmutable $end): array
+    {
         $from = $start->getTimestamp();
         $to = $end->getTimestamp();
-        $exporter = $this->resolver->resolve($device);
-        $ip = $exporter['ip'] ?? null;
         $name = (string)$port->ifName;
 
-        $key = 'akvorado-port-traffic-history-v1:'.hash('sha256', json_encode([
+        $key = 'akvorado-port-traffic-history-v2:'.hash('sha256', json_encode([
             config('akvorado-flow.url'), $device->device_id, $port->port_id, $ip, $name, $from, $to,
         ], JSON_THROW_ON_ERROR));
-        $history = Cache::remember($key, (int)config('akvorado-flow.cache_seconds', 60),
+        return Cache::remember($key, (int)config('akvorado-flow.cache_seconds', 60),
             function () use ($port, $ip, $name, $start, $end, $from, $to): array {
                 $snmp = $this->snmp($port, $from, $to);
                 $points = max(72, min(360, count($snmp['timestamps'] ?? []) * 2));
@@ -47,10 +91,8 @@ final class PortTrafficHistory
                     }
                 }
 
-                return self::chart($snmp, $flows, $from, $to);
+                return ['snmp' => $snmp, 'flows' => $flows];
             });
-
-        return $history + ['start' => $from, 'end' => $to, 'exporterMapped' => $ip !== null];
     }
 
     private function snmp(Port $port, int $from, int $to): array
@@ -118,19 +160,59 @@ final class PortTrafficHistory
     /** RRD timestamps describe interval ends. Use the same interval for both rate estimates. */
     public static function chart(array $snmp, array $flows, int $from, int $to): array
     {
+        return self::charts([['snmp' => $snmp, 'flows' => $flows]], $from, $to);
+    }
+
+    public static function comparisonChart(array $ports, int $from, int $to): array
+    {
+        return self::charts($ports, $from, $to);
+    }
+
+    /** Convert each source to interval starts before choosing the shared grid. */
+    private static function buckets(array $snmp, array $flows, int $from, int $to): array
+    {
         $times = $snmp['timestamps'] ?? [];
-        $snmpStep = FlowFormatter::bucketStep($times);
-        $steps = array_filter([$snmpStep, $flows['in']['step'] ?? null, $flows['out']['step'] ?? null]);
-        if ($steps === []) {
+        $step = FlowFormatter::bucketStep($times);
+        $sources = [];
+        foreach (array_keys(self::DIRECTIONS) as $direction) {
+            $rrd = [];
+            if ($step !== null) {
+                $rates = [];
+                foreach ($times as $index => $end) {
+                    if ($end - $step >= $from && $end <= $to) {
+                        $rates[$end - $step] = self::rate($snmp['series'][$direction]['avg'][$index] ?? null);
+                    }
+                }
+                $rrd = ['origin' => $times[0] - $step, 'step' => $step, 'rates' => $rates];
+            }
+            $sources[$direction] = ['snmp' => $rrd, 'flow' => $flows[$direction] ?? []];
+        }
+
+        return $sources;
+    }
+
+    private static function charts(array $ports, int $from, int $to): array
+    {
+        $sources = array_map(static fn ($port) => self::buckets($port['snmp'], $port['flows'], $from, $to), $ports);
+        $gridSources = $sources;
+        ksort($gridSources); // Swapping the selected ports changes the display order, not the grid.
+        $grid = [];
+        foreach ($gridSources as $port) {
+            foreach (['snmp', 'flow'] as $type) {
+                foreach ($port as $direction) {
+                    $source = $direction[$type];
+                    if (($source['step'] ?? 0) > ($grid['step'] ?? 0)) {
+                        $grid = $source;
+                    }
+                }
+            }
+        }
+        if ($grid === []) {
             return ['step' => null, 'charts' => []];
         }
-        $step = max($steps);
-        $origin = match (true) {
-            $snmpStep === $step => $times[0],
-            ($flows['in']['step'] ?? null) === $step => $flows['in']['origin'],
-            default => $flows['out']['origin'],
-        };
 
+        $step = $grid['step'];
+        $origin = $grid['origin'];
         $ends = [];
         $first = $origin + (int)ceil(($from + $step - $origin) / $step) * $step;
         for ($end = $first; $end <= $to; $end += $step) {
@@ -138,38 +220,57 @@ final class PortTrafficHistory
         }
         $labels = array_map(static fn (int $end) => gmdate('Y-m-d H:i:s', $end).' UTC', $ends);
         $charts = [];
+        $comparison = count($ports) === 2;
         foreach (array_keys(self::DIRECTIONS) as $direction) {
-            $rrd = [];
-            if ($snmpStep !== null) {
-                $rates = [];
-                foreach ($times as $index => $end) {
-                    if ($end - $snmpStep >= $from && $end <= $to) {
-                        $rates[$end - $snmpStep] = self::rate($snmp['series'][$direction]['avg'][$index] ?? null);
-                    }
+            $series = [];
+            $valuesByType = ['snmp' => [], 'flow' => []];
+            $colorIndex = 0;
+            foreach ($sources as $id => $port) {
+                foreach (['snmp' => 'LibreNMS SNMP', 'flow' => 'Akvorado L2'] as $type => $label) {
+                    $values = array_map(static fn ($end) => self::intervalMean($port[$direction][$type], $end - $step, $end), $ends);
+                    $valuesByType[$type][] = $values;
+                    $series[] = [
+                        'label' => $comparison ? $ports[$id]['label'].' · '.$label : $label,
+                        'values' => $values,
+                        'dashed' => $type === 'flow',
+                    ] + ($comparison ? ['colorIndex' => $colorIndex] : []);
                 }
-                $rrd = ['origin' => $times[0] - $snmpStep, 'step' => $snmpStep, 'rates' => $rates];
+                $colorIndex += 2;
             }
-            $snmpValues = [];
-            $flowValues = [];
-            foreach ($ends as $end) {
-                $snmpValues[] = self::intervalMean($rrd, $end - $step, $end);
-                $flowValues[] = self::intervalMean($flows[$direction] ?? [], $end - $step, $end);
-            }
+
             $charts[$direction] = [
                 'labels' => $labels,
                 'timestamps' => $ends,
                 'unit' => 'l2bps',
                 'lines' => true,
-                'series' => [
-                    ['label' => 'LibreNMS SNMP', 'values' => $snmpValues],
-                    ['label' => 'Akvorado L2', 'values' => $flowValues, 'dashed' => true],
-                ],
-                'hasSnmp' => self::hasRate($snmpValues),
-                'hasFlow' => self::hasRate($flowValues),
-            ];
+                'series' => $series,
+                'hasSnmp' => self::hasRate(array_merge(...$valuesByType['snmp'])),
+                'hasFlow' => self::hasRate(array_merge(...$valuesByType['flow'])),
+            ] + ($comparison ? ['averages' => array_map(static fn ($values) => self::matchedAverages(...$values), $valuesByType)] : []);
         }
 
         return ['step' => $step, 'charts' => $charts];
+    }
+
+    private static function matchedAverages(array $first, array $second): ?array
+    {
+        $count = 0;
+        $left = 0.0;
+        $right = 0.0;
+        foreach ($first as $index => $rate) {
+            if ($rate !== null && $second[$index] !== null) {
+                $left += $rate;
+                $right += $second[$index];
+                $count++;
+            }
+        }
+        if ($count === 0) {
+            return null;
+        }
+        $total = $left + $right;
+
+        return ['count' => $count, 'rates' => [$left / $count, $right / $count],
+            'shares' => $total > 0 ? [100 * $left / $total, 100 * $right / $total] : null];
     }
 
     private static function intervalMean(array $series, int $from, int $end): ?float

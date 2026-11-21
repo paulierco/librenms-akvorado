@@ -11,6 +11,7 @@ A read-only LibreNMS plugin for investigating flow telemetry collected by Akvora
 - Exporter diagnostics with query status, the latest nonzero flow bucket in the selected window, and historical shares of observed L3 traffic with unknown ingress or egress.
 - An all-ports visibility table with each port’s latest SNMP rates and named ingress and egress observations in the selected window.
 - Historical overlays compare a selected port’s SNMP rates and Akvorado L2 estimates in shared ingress and egress time buckets.
+- Side-by-side port comparison shows two ports’ rates and traffic shares on the same time grid.
 - Selected-port SNMP counter history aligned to the investigation window, including traffic, errors, and discards. Flow-to-counter coverage estimates are available for comparable L2 traffic queries.
 - A paginated exporter inventory and an optional API for supplying LibreNMS interface metadata to Akvorado.
 
@@ -58,6 +59,10 @@ Enable AKVORADO_FLOW_SHOW_LINK to open the scoped window directly in Akvorado Vi
 ## Compare historical SNMP and flow traffic
 
 Select a port on the Akvorado device tab and open **Historical overlay**. Separate ingress and egress charts compare the latest selected window using the same time intervals in bits per second. The view reads LibreNMS RRD history and compares it with Akvorado L2 estimates for the selected port’s full traffic. Akvorado’s zero values are estimates with no matching sampled traffic. Missing readings and partially covered intervals remain gaps. Expand the values table to inspect a bucket.
+
+## Compare two ports
+
+Open **Compare ports** from the device’s Akvorado tab. Pick two ports on the device and use the current fixed window or a rolling lookback. The ingress and egress charts put the two ports’ SNMP rates and sampled Akvorado L2 estimates on one time grid. Average rates and traffic shares for each source use only the buckets with readings from both ports.
 
 ## Check port visibility
 

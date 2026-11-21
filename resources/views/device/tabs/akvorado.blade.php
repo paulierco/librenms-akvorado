@@ -10,6 +10,7 @@
                         $diagnostics = $data['diagnostics'] ?? null;
                         $visibility = $data['visibility'] ?? null;
                         $historicalOverlay = $data['historicalOverlay'] ?? null;
+                        $portComparison = $data['portComparison'] ?? null;
                         $selectedPort = $data['selectedPort'] ?? null;
                         $windowParams = ['period' => $data['period']];
                         if ($data['bounds']) {
@@ -19,7 +20,9 @@
                     <div class="text-right" style="margin:-3px 0 12px">
                         @if($historicalOverlay !== null)
                             <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'port' => $selectedPort->port_id, 'start' => $historicalOverlay['start'], 'end' => $historicalOverlay['end']] + $windowParams) }}" class="btn btn-default btn-sm">Back to port traffic</a>
-                        @elseif($diagnostics !== null || $visibility !== null)
+                        @elseif($portComparison !== null && $selectedPort !== null)
+                            <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'port' => $selectedPort->port_id] + $windowParams) }}" class="btn btn-default btn-sm">Back to port traffic</a>
+                        @elseif($diagnostics !== null || $visibility !== null || $portComparison !== null)
                             <a href="{{ route('device.akvorado', ['device' => $device->device_id] + $windowParams) }}" class="btn btn-default btn-sm">Back to traffic</a>
                         @endif
                         @if($historicalOverlay === null && $selectedPort !== null)
@@ -27,6 +30,9 @@
                         @endif
                         @if($visibility === null)
                             <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'section' => 'port-visibility'] + $windowParams) }}" class="btn btn-default btn-sm">Port visibility</a>
+                        @endif
+                        @if($portComparison === null)
+                            <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'port' => $selectedPort?->port_id, 'section' => 'port-comparison'] + $windowParams) }}" class="btn btn-default btn-sm">Compare ports</a>
                         @endif
                         @if($diagnostics === null)
                             <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'section' => 'diagnostics'] + $windowParams) }}" class="btn btn-default btn-sm">Flow diagnostics</a>
@@ -175,6 +181,8 @@
             </div>
             @if($historicalOverlay !== null)
                 @include('akvorado-flow::device.tabs.historical-overlay', ['period' => $data['period']])
+            @elseif($portComparison !== null)
+                @include('akvorado-flow::device.tabs.port-comparison', ['period' => $data['period'], 'bounds' => $data['bounds']])
             @elseif($visibility !== null)
                 @include('akvorado-flow::device.tabs.port-visibility', ['period' => $data['period']])
             @elseif($diagnostics !== null)

@@ -49,3 +49,35 @@ check($history['step'] === 120 && $history['charts']['in']['series'][0]['values'
 $flowOnly = PortTrafficHistory::chart([], ['in' => $flow], $from, $to);
 check($flowOnly['charts']['in']['hasFlow'] && ! $flowOnly['charts']['in']['hasSnmp'],
     'one source remains available when the other source has no timeline');
+
+$zeroFlow = PortTrafficHistory::flowBuckets([
+    't' => [$from, $from + 120, $to], 'points' => [[0, 0, 0]],
+], $from, $to);
+$ports = [
+    11 => ['label' => '1/1/1', 'snmp' => [
+        'timestamps' => [$from + 60, $from + 120, $from + 180, $from + 240],
+        'series' => ['in' => ['avg' => [100, null, 300, 400]], 'out' => ['avg' => [0, 0, 0, 0]]],
+    ], 'flows' => ['in' => $flow, 'out' => $flow]],
+    24 => ['label' => '1/1/24', 'snmp' => [
+        'timestamps' => [$from + 120, $from + 240],
+        'series' => ['in' => ['avg' => [300, 600]], 'out' => ['avg' => [0, 0]]],
+    ], 'flows' => ['in' => $zeroFlow]],
+];
+$compare = PortTrafficHistory::comparisonChart($ports, $from, $to);
+$ingress = $compare['charts']['in'];
+$egress = $compare['charts']['out'];
+check($compare['step'] === 120 && $ingress['timestamps'] === [$from + 120, $to]
+    && $ingress['timestamps'] === $egress['timestamps']
+    && array_column($ingress['series'], 'values') === [[null, 350.0], [100.0, 200.0], [300.0, 600.0], [0.0, 0.0]],
+    'both ports and sources use the shared coarser grid with independent gaps');
+check($ingress['averages']['snmp']['count'] === 1 && $ingress['averages']['snmp']['rates'] === [350.0, 600.0]
+    && $ingress['averages']['flow'] === ['count' => 2, 'rates' => [150.0, 0.0], 'shares' => [100.0, 0.0]]
+    && $egress['averages']['flow'] === null && $egress['averages']['snmp']['shares'] === null,
+    'traffic shares use matched buckets and preserve zero values and unavailable data');
+$ports[24]['snmp']['timestamps'] = [$from + 180, $from + 300];
+$normal = PortTrafficHistory::comparisonChart($ports, $from, $to)['charts']['in'];
+$reversed = PortTrafficHistory::comparisonChart(array_reverse($ports, true), $from, $to)['charts']['in'];
+check($normal['timestamps'] === $reversed['timestamps']
+    && array_column($normal['series'], 'colorIndex') === [0, 0, 2, 2]
+    && str_starts_with($reversed['series'][0]['label'], '1/1/24'),
+    'swapping ports changes label order and keeps the shared time grid');

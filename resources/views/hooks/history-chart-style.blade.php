@@ -8,4 +8,5 @@
     .akv-history-chart .akv-legend-item { border:1px solid var(--akv-rule); border-radius:4px; background:var(--akv-card-bg); color:var(--akv-ink); padding:4px 8px }
     .akv-history-chart .akv-legend-item[aria-pressed="false"] { opacity:.65; text-decoration:line-through }
     .akv-history-chart .akv-dot { display:inline-block; width:8px; height:8px; margin-right:6px; border-radius:50% }
+    .akv-history-chart .akv-line-key { display:inline-block; width:17px; border-top-width:2px; margin:0 6px 3px 0 }
 </style>

@@ -57,7 +57,7 @@
         const series=data.series.map((s,i)=>({
             label:String(s.label),
             values:s.values.map(value=>(s.previous || data.lines) && value===null ? null : finite(value)).slice(0,data.labels.length),
-            color:colors[i%colors.length],
+            color:colors[(Number.isInteger(s.colorIndex) && s.colorIndex >= 0 ? s.colorIndex : i)%colors.length],
             lineOnly:s.previous===true || data.lines===true,
             dashed:s.previous===true || s.dashed===true
         }));
@@ -138,7 +138,15 @@
         }
         series.forEach((s,i)=>{
             const b=document.createElement('button');b.type='button';b.className='akv-legend-item';b.setAttribute('aria-pressed','true');
-            const dot=document.createElement('span');dot.className='akv-dot';dot.style.backgroundColor=s.color;b.appendChild(dot);
+            const dot=document.createElement('span');
+            dot.className=data.lines ? 'akv-line-key' : 'akv-dot';
+            if(data.lines){
+                dot.style.borderTopColor=s.color;
+                dot.style.borderTopStyle=s.dashed ? 'dashed' : 'solid';
+            }else{
+                dot.style.backgroundColor=s.color;
+            }
+            b.appendChild(dot);
             b.appendChild(document.createTextNode(s.label));
             b.addEventListener('click',()=>{active[i]=!active[i];b.setAttribute('aria-pressed',String(active[i]));draw();});legend.appendChild(b);
         });
