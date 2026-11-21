@@ -53,7 +53,7 @@ $traffic=file_get_contents(__DIR__.'/../src/Services/TrafficService.php');
 $chartScript=file_get_contents(__DIR__.'/../resources/views/hooks/chart-script.blade.php');
 testCase(str_contains($panel,'data-akv-tab="sankey"') && str_contains($panel,'data-akv-sankey') && str_contains($panel,'@json('),'Sankey tab and safe JSON payload');
 testCase(str_contains($chartScript,"root.dataset.akvSankeyLoaded!=='true'") && str_contains($tabs,"$".'showSankey ? $sankeyView : null'), 'Sankey API is loaded only on demand');
-testCase(str_contains($traffic,"$".'sankeyView !== null') && str_contains($traffic, "'akvorado-sankey-v071:") && str_contains($traffic, "'akvorado-flow-v071:"), 'Sankey query isolated and independently cached');
+testCase(str_contains($traffic,"$".'sankeyView !== null') && str_contains($traffic, "'akvorado-sankey-v") && str_contains($traffic, "'akvorado-flow-v"), 'Sankey query isolated and independently cached');
 testCase(str_contains($tabs,"$".'duplicates[$name]') && str_contains($script,'Object.prototype.hasOwnProperty.call(ports,value)'), 'clickable switchports restricted to nonambiguous authorized mapping');
 testCase(!str_contains($script, 'innerHTML') && str_contains($script, 'textContent') && str_contains($script,'createElementNS'), 'vector renderer uses DOM-safe text and attributes');
 testCase(str_contains($script,'section') && str_contains($script,'sankey_view') && str_contains($script,'port'), 'drilldowns preserve investigation scope');

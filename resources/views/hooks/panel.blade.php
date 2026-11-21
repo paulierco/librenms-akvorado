@@ -255,15 +255,8 @@
             @endunless
         </div>
         @if($periodComparison !== null)
-            <div class="akv-info">
-                @if($periodComparison['observed'])
-                    Akvorado returned flows from the previous period.
-                @elseif($periodComparison['unavailable'] !== [])
-                    Previous-period traffic was unavailable for {{ implode(', ', $periodComparison['unavailable']) }}.
-                @else
-                    Akvorado returned no observed traffic for the previous period.
-                @endif
-                {{ $periodComparison['start'] }} to {{ $periodComparison['end'] }} UTC.
+            <div class="akv-grid">
+                @include('akvorado-flow::hooks.period-comparison', ['showComparisonChart' => false])
             </div>
         @endif
         @if(!empty($panel['partial']))<div class="alert alert-info">Some directions or optional queries were unavailable: {{ implode('; ', $panel['partial']) }}.</div>@endif

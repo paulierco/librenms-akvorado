@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.22
+
+- Recheck leading IP conversations that rank in only one period to distinguish missed rankings, no sampled traffic, and unavailable rechecks.
+
 ## v0.7.21
 
 - Add a historical SNMP and Akvorado L2 overlay for a selected port with aligned averages and gaps for missing data.
