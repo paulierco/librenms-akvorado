@@ -11,6 +11,7 @@ use LibreNMS\Interfaces\UI\DeviceTab;
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowDiagnostics;
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowQuery;
 use LibreNMS\Plugins\AkvoradoFlow\Services\PortAlertInvestigation;
+use LibreNMS\Plugins\AkvoradoFlow\Services\PortTrafficHistory;
 use LibreNMS\Plugins\AkvoradoFlow\Services\PortVisibility;
 use LibreNMS\Plugins\AkvoradoFlow\Services\TrafficService;
 
@@ -73,6 +74,18 @@ final class AkvoradoTab implements DeviceTab
             return [
                 'visibility' => app(PortVisibility::class)->forDevice($device, auth()->user(), $minutes, $bounds),
                 'exporterReady' => false,
+                'period' => $minutes,
+                'bounds' => $bounds,
+            ];
+        }
+
+        if ($request->query('section') === 'historical-overlay') {
+            abort_unless($port !== null, 404);
+
+            return [
+                'historicalOverlay' => app(PortTrafficHistory::class)->forPort($device, $port, $minutes, $bounds),
+                'exporterReady' => false,
+                'selectedPort' => $port,
                 'period' => $minutes,
                 'bounds' => $bounds,
             ];

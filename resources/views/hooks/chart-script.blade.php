@@ -46,16 +46,17 @@
     function chartFor(root,name,data,stacked) {
         const th=theme(root);
         const container=root.querySelector('[data-akv-chart="'+name+'"]');
-        if (!container || !data || !Array.isArray(data.series) || !data.series.length || !Array.isArray(data.labels) || data.labels.length < 2) return;
+        if (!container || !data || !Array.isArray(data.series) || !data.series.length || !Array.isArray(data.labels) || data.labels.length < (data.lines ? 1 : 2)) return;
         const canvas=container.querySelector('canvas');
         const tooltip=container.querySelector('.akv-tooltip');
         const legend=root.querySelector('[data-akv-legend="'+name+'"]');
         const active=data.series.map(()=>true);
         const series=data.series.map((s,i)=>({
             label:String(s.label),
-            values:s.values.map(value=>s.previous && value===null ? null : finite(value)).slice(0,data.labels.length),
+            values:s.values.map(value=>(s.previous || data.lines) && value===null ? null : finite(value)).slice(0,data.labels.length),
             color:colors[i%colors.length],
-            previous:s.previous===true
+            lineOnly:s.previous===true || data.lines===true,
+            dashed:s.previous===true || s.dashed===true
         }));
         let hover=-1;
         let dragStart=-1,dragEnd=-1;
@@ -65,7 +66,7 @@
             && timestamps.every(v => Number.isFinite(Number(v)) && Number(v) > 946684800);
 
         const xLeft=65,xRight=14,yTop=14,yBottom=32;
-        const xAt=(i,n,w)=>(xLeft+(w-xLeft-xRight)*i/Math.max(1,n-1));
+        const xAt=(i,n,w)=>(xLeft+(w-xLeft-xRight)*(n===1 ? .5 : i/(n-1)));
         function draw() {
             const {ctx,width:w,height:h}=setupCanvas(canvas,252);
             const n=data.labels.length, pH=h-yTop-yBottom;
@@ -83,14 +84,14 @@
             }
             const ticks=Math.min(5,n-1);
             for(let j=0;j<=ticks;j++){
-                const ix=Math.round((n-1)*j/ticks),x=xAt(ix,n,w);
-                ctx.fillStyle=th.muted;ctx.textAlign=j===0?'left':j===ticks?'right':'center';
+                const ix=ticks===0 ? 0 : Math.round((n-1)*j/ticks),x=xAt(ix,n,w);
+                ctx.fillStyle=th.muted;ctx.textAlign=ticks===0?'center':j===0?'left':j===ticks?'right':'center';
                 ctx.fillText(stamp(data.labels[ix]),x,h-12);
             }
             const bottom=Array(n).fill(0);
             series.forEach((s,i)=>{
                 if (!active[i]) return;
-                if (s.previous) {
+                if (s.lineOnly) {
                     ctx.beginPath();
                     let drawing=false;
                     s.values.forEach((value,j)=>{
@@ -99,7 +100,16 @@
                         if(drawing)ctx.lineTo(x,y);else ctx.moveTo(x,y);
                         drawing=true;
                     });
-                    ctx.setLineDash([5,4]);ctx.strokeStyle=s.color;ctx.lineWidth=1.8;ctx.stroke();ctx.setLineDash([]);
+                    ctx.setLineDash(s.dashed ? [5,4] : []);
+                    ctx.strokeStyle=s.color;ctx.lineWidth=1.8;ctx.stroke();ctx.setLineDash([]);
+                    if (data.lines) {
+                        ctx.fillStyle=s.color;
+                        s.values.forEach((value,j)=>{
+                            if(value!==null){
+                                ctx.beginPath();ctx.arc(xAt(j,n,w),yAt(value),2,0,Math.PI*2);ctx.fill();
+                            }
+                        });
+                    }
                     return;
                 }
                 const top=s.values.map((v,j)=>v+(stacked?bottom[j]||0:0));
@@ -178,7 +188,7 @@
             series.forEach((s,i)=>{
                 if(!active[i])return;
                 const value=s.values[hover];
-                lines.push(s.label+': '+(s.previous && value==null ? 'Unavailable' : niceNumber(value||0,data.unit)));
+                lines.push(s.label+': '+(s.lineOnly && value==null ? 'Unavailable' : niceNumber(value||0,data.unit)));
             });
             tooltip.textContent=lines.join('\n');tooltip.style.display='block';
             tooltip.style.left=Math.min(w-190,Math.max(10,e.clientX-rect.left+12))+'px';
@@ -278,6 +288,8 @@
             chartFor(root,'ports',data.ports,true);
             chartFor(root,'member_in',data.member_in,false);
             chartFor(root,'member_out',data.member_out,false);
+            chartFor(root,'history_in',data.in,false);
+            chartFor(root,'history_out',data.out,false);
             donutFor(root,data.donut);
         } catch(err) { /* charts are optional; do not break the LibreNMS page */ }
     });

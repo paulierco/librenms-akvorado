@@ -9,14 +9,21 @@
                     @php
                         $diagnostics = $data['diagnostics'] ?? null;
                         $visibility = $data['visibility'] ?? null;
+                        $historicalOverlay = $data['historicalOverlay'] ?? null;
+                        $selectedPort = $data['selectedPort'] ?? null;
                         $windowParams = ['period' => $data['period']];
                         if ($data['bounds']) {
                             $windowParams += ['start' => $data['bounds']['start']->getTimestamp(), 'end' => $data['bounds']['end']->getTimestamp()];
                         }
                     @endphp
                     <div class="text-right" style="margin:-3px 0 12px">
-                        @if($diagnostics !== null || $visibility !== null)
+                        @if($historicalOverlay !== null)
+                            <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'port' => $selectedPort->port_id, 'start' => $historicalOverlay['start'], 'end' => $historicalOverlay['end']] + $windowParams) }}" class="btn btn-default btn-sm">Back to port traffic</a>
+                        @elseif($diagnostics !== null || $visibility !== null)
                             <a href="{{ route('device.akvorado', ['device' => $device->device_id] + $windowParams) }}" class="btn btn-default btn-sm">Back to traffic</a>
+                        @endif
+                        @if($historicalOverlay === null && $selectedPort !== null)
+                            <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'port' => $selectedPort->port_id, 'section' => 'historical-overlay'] + $windowParams) }}" class="btn btn-default btn-sm">Historical overlay</a>
                         @endif
                         @if($visibility === null)
                             <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'section' => 'port-visibility'] + $windowParams) }}" class="btn btn-default btn-sm">Port visibility</a>
@@ -156,7 +163,9 @@
                     @endif
                 </div>
             </div>
-            @if($visibility !== null)
+            @if($historicalOverlay !== null)
+                @include('akvorado-flow::device.tabs.historical-overlay', ['period' => $data['period']])
+            @elseif($visibility !== null)
                 @include('akvorado-flow::device.tabs.port-visibility', ['period' => $data['period']])
             @elseif($diagnostics !== null)
                 @include('akvorado-flow::device.tabs.flow-diagnostics', ['period' => $data['period']])
