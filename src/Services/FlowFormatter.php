@@ -262,6 +262,26 @@ final class FlowFormatter
         return number_format($value, 0).' B';
     }
 
+    /** A malformed response must remain distinct from a successful empty result. */
+    public static function conversationRows(array $payload): ?array
+    {
+        $rows = $payload['rows'] ?? null;
+        $rates = $payload['xps'] ?? null;
+        if (! is_array($rows) || ! array_is_list($rows) || ! is_array($rates) || ! array_is_list($rates)
+            || count($rows) !== count($rates)) {
+            return null;
+        }
+
+        foreach ($rows as $i => $row) {
+            if (! is_array($row) || count($row) !== 2 || ! is_string($row[0] ?? null) || ! is_string($row[1] ?? null)
+                || ! is_numeric($rates[$i]) || ! is_finite((float) $rates[$i])) {
+                return null;
+            }
+        }
+
+        return $rows;
+    }
+
     /** @return list<array{source:string,destination:string,bps:float}> */
     public static function conversations(array $payload, int $limit = 12): array
     {

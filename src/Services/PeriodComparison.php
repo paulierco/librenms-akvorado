@@ -24,7 +24,7 @@ final class PeriodComparison
         ], static fn ($curve) => ! empty($curve['samples']));
         $directions = array_keys($currentCurves);
 
-        $key = 'akvorado-period-comparison-v1:'.hash('sha256', json_encode([
+        $key = 'akvorado-period-comparison-v2:'.hash('sha256', json_encode([
             config('akvorado-flow.url'), $ip, $interfaces, $metric, $focus, $directions,
             $previousStart->getTimestamp(), $start->getTimestamp(),
         ], JSON_THROW_ON_ERROR));
@@ -42,7 +42,8 @@ final class PeriodComparison
 
                 return [
                     'curves' => $curves,
-                    'conversations' => is_array($payload['rows'] ?? null) ? FlowFormatter::conversations($payload, 24) : null,
+                    'conversations' => FlowFormatter::conversationRows($payload ?? []) === null
+                        ? null : FlowFormatter::conversations($payload, 24),
                 ];
             });
 
@@ -68,9 +69,17 @@ final class PeriodComparison
                 $series[] = ['label' => $labels[$direction], 'values' => $values, 'previous' => true];
             }
         }
-        $increases = $previous['conversations'] !== null && ! in_array('Conversations unavailable', $panel['partial'] ?? [], true)
-            ? self::increases($panel['conversations'] ?? [], $previous['conversations'])
-            : null;
+        $increases = null;
+        $conversationChanges = null;
+        if ($previous['conversations'] !== null && ! in_array('Conversations unavailable', $panel['partial'] ?? [], true)) {
+            $currentPairs = self::rankedPairs($panel['conversations'] ?? []);
+            $previousPairs = self::rankedPairs($previous['conversations']);
+            $increases = self::rankedIncreases($currentPairs, $previousPairs);
+            $conversationChanges = [
+                ...$this->recheck($currentPairs, $previousPairs, 'current', $ip, $interfaces, $focus, $previousStart, $start),
+                ...$this->recheck($previousPairs, $currentPairs, 'previous', $ip, $interfaces, $focus, $start, $end),
+            ];
+        }
 
         return [
             'start' => $previousStart->format('Y-m-d H:i:s'),
@@ -79,6 +88,7 @@ final class PeriodComparison
             'observed' => $observed,
             'unavailable' => $unavailable,
             'increases' => $increases,
+            'conversationChanges' => $conversationChanges,
         ];
     }
 
@@ -110,34 +120,96 @@ final class PeriodComparison
     /** Compare actual IP pairs that appear in both rankings and omit the aggregate remainder. */
     public static function increases(array $current, array $previous): array
     {
-        $key = static function (array $row): ?string {
-            $source = @inet_pton($row['source']);
-            $destination = @inet_pton($row['destination']);
-            if ($source === false || $destination === false
-                || trim($source, "\0") === '' || trim($destination, "\0") === '') {
-                return null;
-            }
-            return bin2hex($source).':'.bin2hex($destination);
-        };
-        $previousRates = [];
-        foreach ($previous as $row) {
-            $id = $key($row);
-            if ($id !== null && is_finite($row['bps'])) {
-                $previousRates[$id] = $row['bps'];
-            }
-        }
+        return self::rankedIncreases(self::rankedPairs($current), self::rankedPairs($previous));
+    }
 
+    private static function rankedIncreases(array $current, array $previous): array
+    {
         $increases = [];
-        foreach ($current as $row) {
-            $id = $key($row);
-            $previousRate = $id === null ? null : ($previousRates[$id] ?? null);
-            if ($previousRate !== null && is_finite($row['bps']) && $row['bps'] > $previousRate) {
+        foreach ($current as $id => $row) {
+            $previousRate = $previous[$id]['bps'] ?? null;
+            if ($previousRate !== null && $row['bps'] > $previousRate) {
                 $increases[] = $row + ['previousBps' => $previousRate, 'increaseBps' => $row['bps'] - $previousRate];
             }
         }
         usort($increases, static fn ($a, $b) => $b['increaseBps'] <=> $a['increaseBps']);
 
         return array_slice($increases, 0, 8);
+    }
+
+    private static function rankedPairs(array $ranking): array
+    {
+        $pairs = [];
+        foreach ($ranking as $row) {
+            $id = self::pairKey($row['source'], $row['destination']);
+            if ($id !== null && is_finite($row['bps']) && $row['bps'] > ($pairs[$id]['bps'] ?? 0.0)) {
+                $pairs[$id] = $row;
+            }
+        }
+
+        return $pairs;
+    }
+
+    /** Match address spellings used by different Console responses, including mapped IPv4. */
+    private static function pairKey(mixed $source, mixed $destination): ?string
+    {
+        $addresses = [];
+        foreach ([$source, $destination] as $address) {
+            $packed = is_string($address) ? @inet_pton($address) : false;
+            if ($packed === false || $packed === str_repeat("\0", strlen($packed))) {
+                return null;
+            }
+            if (str_starts_with($packed, "\0\0\0\0\0\0\0\0\0\0\xff\xff")) {
+                $packed = substr($packed, 12);
+                if ($packed === "\0\0\0\0") {
+                    return null;
+                }
+            }
+            $addresses[] = bin2hex($packed);
+        }
+
+        return implode(':', $addresses);
+    }
+
+    private function recheck(array $ranked, array $other, string $window, string $ip, string|array|null $interfaces, array $focus, DateTimeImmutable $start, DateTimeImmutable $end): array
+    {
+        // The rankings are ordered by bitrate. Exclude shared pairs before applying the cap.
+        $candidates = array_slice(array_diff_key($ranked, $other), 0, FlowQuery::CONVERSATION_RECHECK_LIMIT, true);
+        if ($candidates === []) {
+            return [];
+        }
+
+        $query = FlowQuery::conversationPresence($ip, $interfaces, $focus, $candidates, $start, $end);
+        $key = 'akvorado-conversation-presence-v1:'.hash('sha256', json_encode([config('akvorado-flow.url'), $query], JSON_THROW_ON_ERROR));
+        $result = Cache::remember($key, (int) config('akvorado-flow.cache_seconds', 60), function () use ($query, $candidates): array {
+            return ['observed' => $this->observedPairs($this->query('graph/sankey', $query), $candidates)];
+        });
+        $observed = $result['observed'];
+        $rows = [];
+        foreach ($candidates as $id => $row) {
+            $rows[] = $row + ['window' => $window, 'otherObserved' => $observed === null ? null : isset($observed[$id])];
+        }
+
+        return $rows;
+    }
+
+    /** A matching row establishes presence even when Akvorado rounds its rate to zero. */
+    private function observedPairs(?array $payload, array $candidates): ?array
+    {
+        $rows = FlowFormatter::conversationRows($payload ?? []);
+        if ($rows === null) {
+            return null;
+        }
+        $observed = [];
+        foreach ($rows as $row) {
+            $id = self::pairKey($row[0], $row[1]);
+            if ($id === null || ! isset($candidates[$id])) {
+                return null;
+            }
+            $observed[$id] = true;
+        }
+
+        return $observed;
     }
 
     private function query(string $endpoint, array $payload): ?array

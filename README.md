@@ -5,7 +5,7 @@ A read-only LibreNMS plugin for investigating flow telemetry collected by Akvora
 ## Features
 
 - Device and port traffic charts, top talkers, conversations, and filters for host IP, source or destination IP, protocol, and destination service port.
-- An optional previous-period overlay for the same device, port, and filters, plus the largest increases for conversations ranked in both windows.
+- An optional previous-period overlay for the same device, port, and filters. See the largest increases among conversations ranked in both windows and recheck up to eight leading IP pairs from each ranking that did not rank in the other window.
 - A communications map with interface, IP, and service views. The interface view can show only known paths or only paths with unknown ingress, with the excluded bitrate share shown alongside the diagram.
 - Fixed-time incident links that preserve the investigation filters. An optional link opens Akvorado Visualize with the same time window and flow filter.
 - Exporter diagnostics with query status, the latest nonzero flow bucket in the selected window, and the shares of observed L3 traffic with unknown ingress or egress.
@@ -77,6 +77,7 @@ Use false for a plain-text template. The link uses the configured LibreNMS base 
 
 ## Understand the results
 
+- The conversation recheck distinguishes a pair observed below the ranking cutoff, a successful query with no sampled traffic for that pair, and an unavailable recheck. Sampling and collector coverage affect all presence results.
 - Akvorado reports sampled flow observations. An interface name can be empty because the exporter omitted the interface index or because enrichment could not resolve it. The diagnostic shares use all observed exporter traffic in the selected window. The map’s shares use the ranked paths displayed in that view.
 - A flow can be sampled at multiple points. SNMP counters and flow estimates use different observation and aggregation methods. A coverage percentage is an estimate and may differ from the interface’s polled counters.
 - Link-aggregate member links depend on the relationships LibreNMS has discovered in its port stack. Aggregate traffic may be attributed to physical members or to the logical interface by the exporter.

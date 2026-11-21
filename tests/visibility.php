@@ -97,6 +97,13 @@ $panel = ['ok' => true, 'flowState' => 'no_matching_flows', 'minutes' => 60,
     'exporter' => '192.0.2.10', 'mapping' => 'explicit', 'deviceId' => 42,
     'traffic' => ['samples' => [0, 0], 'plot' => [0], 'last' => 0.0, 'avg' => 0.0, 'max' => 0.0],
     'rankings' => [], 'snmpHistory' => $history];
+$panel['periodComparison'] = [
+    'start' => '2026-11-20 10:30:00', 'end' => '2026-11-20 11:00:00',
+    'series' => [], 'observed' => true, 'unavailable' => [], 'increases' => [],
+    'conversationChanges' => [
+        ['source' => '192.0.2.44', 'destination' => '198.51.100.22', 'window' => 'previous', 'bps' => 2000.0, 'otherObserved' => false],
+    ],
+];
 echo $app['view']->make('akvorado-flow::hooks.panel',
     ['panel' => $panel, 'heading' => 'Switch traffic', 'context' => 'sw1'])->render();
 foreach (['exporter_unmapped', 'exporter_not_observed', 'exporter_verification_unavailable'] as $state) {
@@ -118,6 +125,8 @@ PHP;
 
 if (is_string($rendered) && strlen($rendered) > 500) {
     verify(str_contains($rendered, 'No matching Akvorado flow data found'), 'rendered no-data state is labelled');
+    verify(str_contains($rendered, 'New and disappearing conversations') && str_contains($rendered, 'No sampled traffic'),
+        'previous-only conversations remain visible when the current period has no flows');
     verify(str_contains($rendered, 'No Akvorado exporter mapped')
         && str_contains($rendered, 'Exporter not seen in recent results')
         && str_contains($rendered, 'Exporter status unavailable'), 'rendered exporter setup states');

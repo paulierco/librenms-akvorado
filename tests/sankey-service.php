@@ -197,5 +197,93 @@ namespace LibreNMS\Plugins\AkvoradoFlow\Services {
     assertResult(PeriodComparison::align([1300, 1360, 1420], ['timestamps'=>[1000,1060,1180], 'samples'=>[5.0,0.0,8.0]], 300, 1000, 1300)
         === [5.0, 0.0, null], 'a missing prior bucket stays unavailable rather than becoming zero');
 
+    Cache::$stored = [];
+    $changesClient = new AkvoradoClient();
+    $changesService = new TrafficService(new ExporterResolver(), $changesClient);
+    $failedRecheck = false;
+    $currentEmpty = false;
+    $currentMalformed = false;
+    $changesClient->respond = static function (array $query) use (&$failedRecheck, &$currentEmpty, &$currentMalformed): array {
+        $prior = $query['start'] === '2026-11-20T10:30:00Z';
+        if (isset($query['points'])) {
+            $start = new \DateTimeImmutable($query['start']);
+            return ['t' => [$start->format(DATE_ATOM), $start->modify('+60 seconds')->format(DATE_ATOM)],
+                'points' => [! $prior && $currentEmpty ? [0, 0] : [10, 20]], 'rows' => [[]]];
+        }
+        if (str_contains($query['filter'], ' AND ((SrcAddr = ')) {
+            if ($prior && $failedRecheck) {
+                throw new \RuntimeException('HTTP 503');
+            }
+            if (! $prior && $currentEmpty) {
+                return ['rows' => [], 'xps' => []];
+            }
+            // A match remains observed when the integer bitrate rounds to zero.
+            return ['rows' => [['::ffff:192.0.2.44', '198.51.100.'.($prior ? '10' : '30')]], 'xps' => [0]];
+        }
+        if ($query['dimensions'] !== ['SrcAddr', 'DstAddr'] || (! $prior && $currentEmpty)) {
+            return ['rows' => [], 'xps' => []];
+        }
+        if (! $prior && $currentMalformed) {
+            return ['rows' => []];
+        }
+        $rows = array_map(static fn ($last) => ['192.0.2.44', '198.51.100.'.$last], $prior ? range(30, 40) : range(10, 20));
+        $rows[] = [$prior ? '::ffff:192.0.2.44' : '192.0.2.44', '198.51.100.2'];
+        $rows[] = ['Other', 'Other'];
+        $rows[] = ['::ffff:0.0.0.0', '198.51.100.9'];
+        return ['rows' => $rows, 'xps' => [...range(1000, 990), $prior ? 100 : 300, 2000, 2200]];
+    };
+    $changeFocus = ['host' => '192.0.2.44', 'proto' => '6', 'dst_port' => '443'];
+    $compare = static fn () => $changesService->panel($device, $port, 60, 'l3bps', 'SrcAddr', $changeFocus, $bounds, null, false, true);
+    $checks = static fn () => array_values(array_filter($changesClient->requests,
+        static fn ($entry) => str_contains($entry[1]['filter'], ' AND ((SrcAddr = ')));
+    $result = $compare()['periodComparison'];
+    $changes = $result['conversationChanges'];
+    assertResult(count($changes) === 16
+        && array_column(array_slice($changes, 0, 2), 'otherObserved') === [true, false]
+        && array_column(array_slice($changes, 8, 2), 'otherObserved') === [true, false]
+        && $changes[0]['window'] === 'current' && $changes[8]['window'] === 'previous',
+        'one bounded batch per window separates below-rank, new and disappearing pairs and detects zero-rate matches');
+    assertResult(count($result['increases']) === 1 && $result['increases'][0]['increaseBps'] === 200.0,
+        'shared pairs match across IPv4 spellings and still rank as increases');
+    $rechecks = $checks();
+    assertResult(count($rechecks) === 2 && $rechecks[0][1]['start'] === '2026-11-20T10:30:00Z'
+        && $rechecks[0][1]['end'] === '2026-11-20T11:00:00Z'
+        && $rechecks[1][1]['start'] === '2026-11-20T11:00:00Z'
+        && $rechecks[1][1]['end'] === '2026-11-20T11:30:00Z',
+        'exact rechecks target the opposite window in each direction');
+    foreach ($rechecks as [$endpoint, $query]) {
+        assertResult($endpoint === 'graph/sankey' && $query['limit'] === 8 && $query['bidirectional'] === false
+            && str_starts_with($query['filter'], FlowQuery::filter('192.0.2.12', '1/1/1', 'both', $changeFocus).' AND (')
+            && substr_count($query['filter'], '(SrcAddr = 192.0.2.44 AND DstAddr = 198.51.100.') === 8
+            && ! str_contains($query['filter'], 'Other') && ! str_contains($query['filter'], '0.0.0.0'),
+            'batched pair clauses preserve the exporter, port, host and service filters');
+    }
+    $compare();
+    assertResult(count($checks()) === 2, 'identical exact rechecks use the existing cache TTL');
+
+    Cache::$stored = [];
+    $failedRecheck = true;
+    $failed = $compare()['periodComparison'];
+    assertResult(array_column(array_slice($failed['conversationChanges'], 0, 8), 'otherObserved') === array_fill(0, 8, null)
+        && $failed['conversationChanges'][8]['otherObserved'] === true && count($failed['increases']) === 1,
+        'failed presence batch leaves its results unavailable and preserves successful comparisons');
+
+    Cache::$stored = [];
+    $failedRecheck = false;
+    $currentEmpty = true;
+    $empty = $compare();
+    assertResult($empty['flowState'] === 'no_matching_flows'
+        && count($empty['periodComparison']['conversationChanges']) === 8
+        && $empty['periodComparison']['conversationChanges'][0]['window'] === 'previous'
+        && $empty['periodComparison']['conversationChanges'][0]['otherObserved'] === false,
+        'previous conversations can disappear into an empty current window');
+
+    Cache::$stored = [];
+    $currentEmpty = false;
+    $currentMalformed = true;
+    $beforeMalformed = count($checks());
+    assertResult($compare()['periodComparison']['conversationChanges'] === null && count($checks()) === $beforeMalformed,
+        'malformed current rankings do not trigger absence detection');
+
     echo "All Sankey, flow diagnostics and comparison tests passed.\n";
 }

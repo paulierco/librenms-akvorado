@@ -9,6 +9,8 @@ use InvalidArgumentException;
 /** Query builder; inputs are validated and no raw user filter reaches Akvorado. */
 final class FlowQuery
 {
+    public const CONVERSATION_RECHECK_LIMIT = 8;
+
     public static function filter(string $ip, string|array|null $interfaceName = null, string $direction = 'both', array $focus = []): string
     {
         if (! filter_var($ip, FILTER_VALIDATE_IP)) { throw new InvalidArgumentException('Invalid exporter address'); }
@@ -195,6 +197,26 @@ final class FlowQuery
             'dimensions' => array_values($dimensions), 'limit' => max(1, min(30, $limit)),
             'bidirectional' => false,
         ]);
+    }
+
+    /** Recheck a batch of directed IP pairs without changing the investigation filters. */
+    public static function conversationPresence(string $ip, string|array|null $interfaceName, array $focus, array $pairs, \DateTimeImmutable $start, \DateTimeImmutable $end): array
+    {
+        if ($pairs === [] || count($pairs) > self::CONVERSATION_RECHECK_LIMIT) {
+            throw new InvalidArgumentException('Invalid conversation recheck batch size');
+        }
+        $query = self::sankey($ip, $interfaceName, 60, $end, ['SrcAddr', 'DstAddr'], count($pairs), $focus, $start);
+        $matches = [];
+        foreach ($pairs as $pair) {
+            $addresses = self::focus(['src' => $pair['source'] ?? null, 'dst' => $pair['destination'] ?? null]);
+            if (! isset($addresses['src'], $addresses['dst'])) {
+                throw new InvalidArgumentException('Conversation recheck requires both endpoints');
+            }
+            $matches[] = '(SrcAddr = '.$addresses['src'].' AND DstAddr = '.$addresses['dst'].')';
+        }
+        $query['filter'] .= ' AND ('.implode(' OR ', $matches).')';
+
+        return $query;
     }
 
     /** Restrict each direction to the page of names and request a group for every name. */

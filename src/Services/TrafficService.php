@@ -102,7 +102,7 @@ final class TrafficService
 
         $scope = $port ? 'port'.(string) ($port->port_id ?? $index) : 'device';
         // Include the LAG flag so member-inclusive requests have their own cache entry.
-        $key = 'akvorado-flow-v071:'.hash('sha256', json_encode([
+        $key = 'akvorado-flow-v0722:'.hash('sha256', json_encode([
             $exporter['ip'], $interfaceScope, $scope, $minutes, $metric, $dimension, $focus,
             $now->getTimestamp(), $start?->getTimestamp(), $lagIncluded ? 'lag-members' : 'logical',
         ], JSON_THROW_ON_ERROR));
@@ -173,7 +173,11 @@ final class TrafficService
                     $packets = $metric === 'pps' && $interfaceScope === null ? $traffic : FlowFormatter::line($this->client->post('graph/line', FlowQuery::line($ip, $interfaceScope, $minutes, $now, 'pps', 'both', null, 10, $focus, $start)), 'pps', $minutes);
                 } catch (\Throwable $e) { $packets = null; $partial[] = 'Packets/sec not available'; }
                 try {
-                    $conversations = FlowFormatter::conversations($this->client->post('graph/sankey', FlowQuery::sankey($ip, $interfaceScope, $minutes, $now, ['SrcAddr', 'DstAddr'], 24, $focus, $start)), 24);
+                    $conversationPayload = $this->client->post('graph/sankey', FlowQuery::sankey($ip, $interfaceScope, $minutes, $now, ['SrcAddr', 'DstAddr'], 24, $focus, $start));
+                    if (FlowFormatter::conversationRows($conversationPayload) === null) {
+                        throw new \RuntimeException('Invalid conversation ranking response');
+                    }
+                    $conversations = FlowFormatter::conversations($conversationPayload, 24);
                 } catch (\Throwable $e) { $conversations = []; $partial[] = 'Conversations unavailable'; }
                 try {
                     $protocolPorts = FlowFormatter::protocolPorts($this->client->post('graph/sankey', FlowQuery::sankey($ip, $interfaceScope, $minutes, $now, ['Proto', 'DstPort'], 20, $focus, $start)), 20);
