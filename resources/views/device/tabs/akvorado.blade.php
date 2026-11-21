@@ -70,20 +70,30 @@
                         <div class="form-group">
                             <label for="akv-dimension">Top by</label>
                             <select class="form-control" id="akv-dimension" name="dimension">
-                                @foreach(['SrcAddr'=>'Source IP','DstAddr'=>'Destination IP','DstPort'=>'Destination port','SrcAS'=>'Source AS'] as $value=>$label)
+                                @foreach($data['dimensionOptions'] as $value=>$label)
                                     <option value="{{ $value }}" @selected($data['dimension'] === $value)>{{ $label }}</option>
                                 @endforeach
                             </select>
                         </div>
-                        <div class="form-group"><label for="akv-host">Host IP (either direction)</label>
-                            <input class="form-control" id="akv-host" name="host" maxlength="45" placeholder="Any host" value="{{ $data['focus']['host'] ?? '' }}" style="width:150px" />
+                        <div class="form-group"><label for="akv-host">Host IP or CIDR (either direction)</label>
+                            <input class="form-control" id="akv-host" name="host" maxlength="49" placeholder="Any host or subnet" value="{{ $data['focus']['host'] ?? '' }}" style="width:175px" />
                         </div>
-                        <div class="form-group"><label for="akv-src">Source IP</label>
-                            <input class="form-control" id="akv-src" name="src" maxlength="45" placeholder="Any source" value="{{ $data['focus']['src'] ?? '' }}" style="width:150px" />
+                        <div class="form-group"><label for="akv-src">Source IP or CIDR</label>
+                            <input class="form-control" id="akv-src" name="src" maxlength="49" placeholder="Any source" value="{{ $data['focus']['src'] ?? '' }}" style="width:175px" />
                         </div>
-                        <div class="form-group"><label for="akv-dst">Destination IP</label>
-                            <input class="form-control" id="akv-dst" name="dst" maxlength="45" placeholder="Any destination" value="{{ $data['focus']['dst'] ?? '' }}" style="width:150px" />
+                        <div class="form-group"><label for="akv-dst">Destination IP or CIDR</label>
+                            <input class="form-control" id="akv-dst" name="dst" maxlength="49" placeholder="Any destination" value="{{ $data['focus']['dst'] ?? '' }}" style="width:175px" />
                         </div>
+                        @foreach($data['layer2Options'] as $field => $label)
+                            <div class="form-group">
+                                <label for="akv-{{ $field }}">{{ $label }}</label>
+                                @if(str_ends_with($field, '_vlan'))
+                                    <input class="form-control" type="number" id="akv-{{ $field }}" name="{{ $field }}" min="1" max="4094" value="{{ $data['focus'][$field] ?? '' }}" style="width:95px" />
+                                @else
+                                    <input class="form-control" id="akv-{{ $field }}" name="{{ $field }}" maxlength="17" placeholder="00:11:22:33:44:55" value="{{ $data['focus'][$field] ?? '' }}" style="width:155px" />
+                                @endif
+                            </div>
+                        @endforeach
                         <div class="form-group"><label for="akv-dst-port">Destination port</label>
                             <input class="form-control" type="number" id="akv-dst-port" name="dst_port" min="0" max="65535" placeholder="Any" value="{{ $data['focus']['dst_port'] ?? '' }}" style="width:100px" />
                         </div>

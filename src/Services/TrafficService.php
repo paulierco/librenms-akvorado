@@ -191,7 +191,7 @@ final class TrafficService
                     );
                 } catch (\Throwable $e) { $portTimeline = ['labels' => [], 'series' => [], 'unit' => 'l3bps']; $partial[] = 'Destination-port history unavailable'; }
                 try {
-                    $ranks = FlowFormatter::rankings($this->client->post('graph/line', FlowQuery::line($ip, $interfaceScope, $minutes, $now, $metric, 'both', $dimension, 12, $focus, $start)), $metric, 12);
+                    $ranks = FlowFormatter::rankings($this->client->post('graph/line', FlowQuery::line($ip, $interfaceScope, $minutes, $now, $metric, 'both', $dimension, 12, $focus, $start)), $metric, 12, $dimension);
                 } catch (\Throwable $e) { $ranks = []; $partial[] = 'Top grouped traffic unavailable'; }
                 try {
                     $detailedFlows = FlowFormatter::detailedFlows(

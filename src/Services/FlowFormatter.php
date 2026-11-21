@@ -216,7 +216,7 @@ final class FlowFormatter
     }
 
     /** One chosen dimension ranked by the source API, not derived from top conversations. */
-    public static function rankings(array $payload, string $metric = 'l3bps', int $limit = 10): array
+    public static function rankings(array $payload, string $metric = 'l3bps', int $limit = 10, ?string $dimension = null): array
     {
         $result = [];
         foreach (($payload['rows'] ?? []) as $i => $row) {
@@ -234,7 +234,8 @@ final class FlowFormatter
                 'label' => $label,
                 'value' => $value,
                 'isOther' => $label === 'Other',
-                'isUnresolved' => str_contains($label, '???'),
+                'isUnresolved' => str_contains($label, '???')
+                    || ($dimension !== null && FlowQuery::isOptionalDimension($dimension) && FlowQuery::rankingFilter($dimension, $label) === []),
             ];
         }
         usort($result, static fn ($a, $b) => (($a['isOther'] <=> $b['isOther']) ?: ($b['value'] <=> $a['value'])));

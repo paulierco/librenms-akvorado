@@ -4,7 +4,7 @@ A read-only LibreNMS plugin for investigating flow telemetry collected by Akvora
 
 ## Features
 
-- Device and port traffic charts, top talkers, conversations, and filters for host IP, source or destination IP, protocol, and destination service port.
+- Device and port traffic charts, top talkers, conversations, and filters for host IP or subnet, source or destination IP or subnet, protocol, and destination service port.
 - An optional previous-period overlay for the same device, port, and filters. See the largest increases among conversations ranked in both windows and recheck up to eight leading IP pairs from each ranking that did not rank in the other window.
 - A communications map with interface, IP, and service views. The interface view can show only known paths or only paths with unknown ingress, with the excluded bitrate share shown alongside the diagram.
 - Fixed-time incident links that preserve the investigation filters. An optional link opens Akvorado Visualize with the same time window and flow filter.
@@ -74,6 +74,12 @@ Within the fault loop of a LibreNMS alert template, include the investigation li
 ~~~
 
 Use false for a plain-text template. The link uses the configured LibreNMS base URL and the existing device and port permissions. It opens the Akvorado tab 15 minutes before the alert through 15 minutes after it, ending at the current time for a recent alert. The previous-period comparison opens automatically. The alert must include a port ID, and the window must fit within the existing fixed-window lookback.
+
+## Investigate subnets, VLANs and MAC addresses
+
+Enter an IPv4 or IPv6 CIDR in **Source IP or CIDR**, **Destination IP or CIDR**, or **Host IP or CIDR**. The host field matches either endpoint. Choose a **Top by** option and open **Top talkers** to see the ranking.
+
+Reported prefix grouping uses the prefixes recorded by Akvorado. Click a specific prefix to filter source or destination addresses within that CIDR. VLAN and MAC filters and rankings appear when the running Console advertises the corresponding fields. Those rankings require flow records with the fields populated. See [Akvorado schema configuration](https://github.com/akvorado/akvorado/blob/main/console/data/docs/50-configuration.md#schema).
 
 ## Understand the results
 
