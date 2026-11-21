@@ -7,6 +7,7 @@ A read-only LibreNMS plugin for investigating flow telemetry collected by Akvora
 - Device and port traffic charts, top talkers, conversations, and filters for host IP, source or destination IP, protocol, and destination service port.
 - An optional previous-period overlay for the same device, port, and filters, plus the largest increases for conversations ranked in both windows.
 - A communications map with interface, IP, and service views. The interface view can show only known paths or only paths with unknown ingress, with the excluded bitrate share shown alongside the diagram.
+- Fixed-time incident links that preserve the investigation filters. An optional link opens Akvorado Visualize with the same time window and flow filter.
 - Exporter diagnostics with query status, the latest nonzero flow bucket in the selected window, and the shares of observed L3 traffic with unknown ingress or egress.
 - Selected-port SNMP counter history aligned to the investigation window, including traffic, errors, and discards. Flow-to-counter coverage estimates are available for comparable L2 traffic queries.
 - A paginated exporter inventory and an optional API for supplying LibreNMS interface metadata to Akvorado.
@@ -46,6 +47,12 @@ AKVORADO_FLOW_EXPORTER_MAP='{"123":"192.0.2.10","switch.example.net":"192.0.2.20
 
 If LibreNMS uses cached configuration, rebuild or clear the configuration cache after editing .env. Visit a device’s **Akvorado** tab and open **Flow diagnostics** to check the mapping and query.
 
+## Share an investigation
+
+Use **Copy incident link** on the Akvorado tab to share the time window shown on the page, including when the time range was originally a rolling preset. The link keeps the selected port, filters, and view and follows the same LibreNMS permissions and eight-day fixed-window lookback as graph zoom.
+
+Enable AKVORADO_FLOW_SHOW_LINK to open the scoped window directly in Akvorado Visualize. The configured Console URL must be reachable by the user's browser. The scoped link uses Akvorado's v1 visualization URL format, verified with v2026.10.1.
+
 ## Understand the results
 
 - Akvorado reports sampled flow observations. An interface name can be empty because the exporter omitted the interface index or because enrichment could not resolve it. The diagnostic shares use all observed exporter traffic in the selected window. The map’s shares use the ranked paths displayed in that view.
@@ -65,6 +72,7 @@ for suite in tests/*.php; do
     php -d zend.assertions=1 -d assert.exception=1 "$suite" || exit 1
 done
 node tests/sankey-render.js
+node tests/incident-sharing.js
 ~~~
 
 Set LIBRENMS_ROOT to run view tests against an installed LibreNMS environment. Set AKVORADO_TEST_DEVICE_ID to render the investigation view with a device that has flows. A read-only selected-port diagnostic is available separately:
