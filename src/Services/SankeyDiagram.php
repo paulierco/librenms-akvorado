@@ -7,6 +7,7 @@ namespace LibreNMS\Plugins\AkvoradoFlow\Services;
 /** Bounded representation of Akvorado's ranked Sankey rows, not raw flows. */
 final class SankeyDiagram
 {
+    public const DISPLAY_LIMIT = 32;
     /** Visible label for an interface Akvorado could not identify. */
     public const PLACEHOLDER_UNRESOLVED = 'source port unknown';
     public const PLACEHOLDER_UNRESOLVED_EGRESS = 'destination port unknown';
@@ -36,7 +37,7 @@ final class SankeyDiagram
     }
 
     /** @return array{dimensions:list<string>,rows:list<array{values:list<string>,bps:float}>,totalBps:float,hasOther:bool,hasUnresolved:bool,unresolvedBps:float,unresolvedShare:float} */
-    public static function fromResponse(array $payload, array $dimensions, int $limit = 32): array
+    public static function fromResponse(array $payload, array $dimensions, int $limit = self::DISPLAY_LIMIT): array
     {
         $width = count($dimensions);
         if ($width < 2 || $width > 4) {

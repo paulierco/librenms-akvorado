@@ -64,6 +64,10 @@ Open **Saved views** and name the current investigation. A saved view keeps the 
 
 Saved views use LibreNMS’s existing user preferences table. Complete the normal LibreNMS database migrations so the preference value can hold the saved settings.
 
+## Export incident data as CSV
+
+Download the CSV beside a conversations table, previous-period comparison, communications map, or port comparison. The file records the fixed UTC window, selected scope, numeric rate units, and any ranking limits. Map exports keep the selected path filter. Port comparisons include matched averages and time buckets, with blank cells for unavailable readings. An empty result contains the investigation context and a \`no_rows\` status.
+
 ## Compare historical SNMP and flow traffic
 
 Select a port on the Akvorado device tab and open **Historical overlay**. Separate ingress and egress charts compare the latest selected window using the same time intervals in bits per second. The view reads LibreNMS RRD history and compares it with Akvorado L2 estimates for the selected port’s full traffic. Akvorado’s zero values are estimates with no matching sampled traffic. Missing readings and partially covered intervals remain gaps. Expand the values table to inspect a bucket.

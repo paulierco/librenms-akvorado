@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.27
+
+- Download incident CSVs for conversations, detailed flows, previous-period changes, filtered map paths, and two-port comparisons. Include UTC time bounds, units, and ranking limits.
+
 ## v0.7.26
 
 - Set exact UTC start and end times on the device tab and save named investigation views per LibreNMS user and device.

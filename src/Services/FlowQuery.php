@@ -10,6 +10,9 @@ use InvalidArgumentException;
 final class FlowQuery
 {
     public const CONVERSATION_RECHECK_LIMIT = 8;
+    public const CONVERSATION_RANK_LIMIT = 24;
+    public const DETAILED_FLOW_LIMIT = 25;
+    public const MAP_RANK_LIMIT = 14;
 
     private const BASE_DIMENSIONS = ['SrcAddr' => 'Source IP', 'DstAddr' => 'Destination IP', 'DstPort' => 'Destination port', 'SrcAS' => 'Source AS'];
     private const OPTIONAL_DIMENSIONS = [

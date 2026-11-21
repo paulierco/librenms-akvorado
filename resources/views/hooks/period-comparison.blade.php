@@ -1,6 +1,9 @@
 <div class="akv-card akv-full akv-pad akv-section" @if($showComparisonChart ?? true) data-akv-section="traffic flows" hidden @endif>
     <h4>Previous-period comparison</h4>
     <div class="akv-card-sub">{{ $periodComparison['start'] }} to {{ $periodComparison['end'] }} UTC</div>
+    @if(isset($csvParams, $periodComparison['increases']))
+        <a class="btn btn-default btn-xs" href="{{ route('device.akvorado.csv', ['report' => 'previous-period'] + $csvParams) }}">Download previous-period CSV</a>
+    @endif
     @if(($showComparisonChart ?? true) && $periodComparison['series'] !== [])
         <p class="akv-card-sub">Dashed lines on the traffic chart show the previous period aligned to the current window.</p>
     @endif

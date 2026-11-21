@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 final class PeriodComparison
 {
+    public const INCREASE_LIMIT = 8;
     public function __construct(private readonly AkvoradoClient $client) {}
 
     /** Compare with the immediately preceding window of exactly the same duration. */
@@ -37,13 +38,13 @@ final class PeriodComparison
                     $curve = $payload === null ? null : FlowFormatter::line($payload, $metric, $minutes);
                     $curves[$direction] = empty($curve['samples']) ? null : $curve;
                 }
-                $query = FlowQuery::sankey($ip, $interfaces, $minutes, $start, ['SrcAddr', 'DstAddr'], 24, $focus, $previousStart);
+                $query = FlowQuery::sankey($ip, $interfaces, $minutes, $start, ['SrcAddr', 'DstAddr'], FlowQuery::CONVERSATION_RANK_LIMIT, $focus, $previousStart);
                 $payload = $this->query('graph/sankey', $query);
 
                 return [
                     'curves' => $curves,
                     'conversations' => FlowFormatter::conversationRows($payload ?? []) === null
-                        ? null : FlowFormatter::conversations($payload, 24),
+                        ? null : FlowFormatter::conversations($payload, FlowQuery::CONVERSATION_RANK_LIMIT),
                 ];
             });
 
@@ -134,7 +135,7 @@ final class PeriodComparison
         }
         usort($increases, static fn ($a, $b) => $b['increaseBps'] <=> $a['increaseBps']);
 
-        return array_slice($increases, 0, 8);
+        return array_slice($increases, 0, self::INCREASE_LIMIT);
     }
 
     private static function rankedPairs(array $ranking): array
