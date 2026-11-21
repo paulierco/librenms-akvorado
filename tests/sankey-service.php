@@ -136,6 +136,12 @@ namespace LibreNMS\Plugins\AkvoradoFlow\Services {
     assertResult($check['state'] === 'observed' && $check['lastBucket'] === '2026-11-20T11:01:00Z'
         && $check['shares']['ingress'] === 60.0 && $check['shares']['egress'] === null,
         'diagnostics report latest nonzero bucket, rate-weighted ingress and unavailable egress');
+    $history = $check['history'];
+    assertResult($history['step'] === 60 && $history['totals'] === [300.0, 100.0, 0.0]
+        && abs($history['chart']['series'][0]['values'][0] - 200 / 3) < 0.00001
+        && array_slice($history['chart']['series'][0]['values'], 1) === [40.0, null]
+        && $history['chart']['series'][1]['values'] === [null, null, null],
+        'history computes rates per bucket, leaves no-traffic gaps and isolates a failed direction');
     $diagnostics->forDevice($device, 60, $bounds);
     assertResult(count($diagnosticClient->requests) === 3, 'repeated diagnostics reuse the cached query set');
     foreach ($diagnosticClient->requests as [$endpoint, $query]) {
@@ -143,6 +149,38 @@ namespace LibreNMS\Plugins\AkvoradoFlow\Services {
             && $query['start'] === '2026-11-20T11:00:00Z' && $query['end'] === '2026-11-20T11:30:00Z',
             'all diagnostics use the same exporter, bounds and metric');
     }
+
+    $partialBounds = ['start' => new \DateTimeImmutable('2026-11-20T11:00:30Z'), 'end' => new \DateTimeImmutable('2026-11-20T11:05:30Z')];
+    $diagnosticClient->respond = static function (array $query): array {
+        if (str_ends_with($query['filter'], 'OutIfName = ""')) {
+            return ['t' => [], 'points' => []];
+        }
+        return [
+            't' => array_map(static fn ($minute) => "2026-11-20T11:0$minute:00Z", [0, 1, 2, 4, 5, 6]),
+            'points' => [str_ends_with($query['filter'], 'InIfName = ""') ? [5, 0, 0, 50, 10, 0] : [40, 80, 0, 40, 30, 0]],
+        ];
+    };
+    $check = $diagnostics->forDevice($device, 60, $partialBounds);
+    $history = $check['history'];
+    assertResult($history['chart']['labels'] === ['2026-11-20 11:01:00 UTC', '2026-11-20 11:02:00 UTC', '2026-11-20 11:03:00 UTC', '2026-11-20 11:04:00 UTC']
+        && $history['totals'] === [80.0, 0.0, null, 40.0]
+        && $history['chart']['series'][0]['values'] === [0.0, null, null, null]
+        && $history['chart']['series'][1]['values'] === [0.0, null, null, 0.0]
+        && $check['shares']['egress'] === 0.0 && $check['lastBucket'] === '2026-11-20T11:05:00Z',
+        'complete buckets retain a missing interval, handle an empty numerator and reject impossible shares');
+
+    Cache::$stored = [];
+    $diagnosticClient->respond = static function (array $query) use ($dataFor): array {
+        $payload = $dataFor([4, 3, 0]);
+        if (str_ends_with($query['filter'], 'OutIfName = ""')) {
+            $payload['t'][0] = '2026-11-20T11:00:30Z';
+        }
+        return $payload;
+    };
+    $check = $diagnostics->forDevice($device, 60, $bounds);
+    assertResult($check['shares']['egress'] === null && $check['history']['chart']['series'][1]['values'] === [null, null, null]
+        && $check['history']['chart']['series'][0]['values'] === [100.0, 100.0, null],
+        'different time grids never produce ratios while the other direction stays available');
 
     Cache::$stored = [];
     $diagnosticClient->requests = [];

@@ -22,6 +22,9 @@
     }
     function finite(v) { return Number.isFinite(Number(v)) ? Math.max(0, Number(v)) : 0; }
     function niceNumber(v, kind) {
+        if (kind === 'percent') {
+            return v.toFixed(Number.isInteger(v) ? 0 : 2)+'%';
+        }
         if (kind === 'pps') {
             return v >= 1e6 ? (v/1e6).toFixed(2)+' Mpps' : v >= 1000 ? (v/1000).toFixed(1)+' kpps' : v.toFixed(0)+' pps';
         }
@@ -74,7 +77,7 @@
             const totals=Array(n).fill(0);
             series.forEach((s,i)=>{if(active[i])s.values.forEach((v,j)=>{if(j<n) totals[j]+=v;});});
             const maxY=Math.max(1,stacked?Math.max(...totals):Math.max(...series.flatMap((s,i)=>active[i]?s.values:[]),1));
-            const scaleMax=maxY*1.13;
+            const scaleMax=data.unit==='percent' ? 100 : maxY*1.13;
             const yAt=(v)=>yTop+pH*(1-v/scaleMax);
             ctx.lineWidth=1;ctx.font='11px sans-serif';ctx.textBaseline='middle';
             for(let i=0;i<=4;i++){
@@ -290,6 +293,7 @@
             chartFor(root,'member_out',data.member_out,false);
             chartFor(root,'history_in',data.in,false);
             chartFor(root,'history_out',data.out,false);
+            chartFor(root,'exporter_health',data.exporterHealth,false);
             donutFor(root,data.donut);
         } catch(err) { /* charts are optional; do not break the LibreNMS page */ }
     });

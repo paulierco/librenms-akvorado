@@ -1,15 +1,5 @@
-<div class="panel panel-default akv-viz akv-history-overlay" data-akv-initialized="false">
-    <style>
-        .akv-history-overlay { --akv-card-bg:#fff; --akv-ink:#1f2d42; --akv-muted:#68758a; --akv-rule:#e8edf4 }
-        .dark .akv-history-overlay { --akv-card-bg:#2e3338; --akv-ink:#c8c8c8; --akv-muted:#acb6bf; --akv-rule:#3e444c }
-        .akv-history-overlay .akv-chart-wrap { position:relative; margin-top:9px; height:252px }
-        .akv-history-overlay canvas { display:block; width:100%; height:252px }
-        .akv-history-overlay .akv-tooltip { display:none; position:absolute; pointer-events:none; white-space:pre; padding:7px 9px; background:#202632; color:#fff; border-radius:4px; font-size:12px }
-        .akv-history-overlay .akv-legend { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px }
-        .akv-history-overlay .akv-legend-item { border:1px solid var(--akv-rule); border-radius:4px; background:var(--akv-card-bg); color:var(--akv-ink); padding:4px 8px }
-        .akv-history-overlay .akv-legend-item[aria-pressed="false"] { opacity:.65; text-decoration:line-through }
-        .akv-history-overlay .akv-dot { display:inline-block; width:8px; height:8px; margin-right:6px; border-radius:50% }
-    </style>
+<div class="panel panel-default akv-viz akv-history-chart" data-akv-initialized="false">
+    @include('akvorado-flow::hooks.history-chart-style')
     <div class="panel-heading"><strong>Historical SNMP and Akvorado overlay</strong> <small class="text-muted">{{ $selectedPort->ifName ?: $selectedPort->ifDescr }}</small></div>
     <div class="panel-body">
         <form method="get" action="{{ route('device.akvorado', ['device' => $device->device_id]) }}" class="form-inline" style="margin-bottom:12px">
