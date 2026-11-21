@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.19
+
+- Added a per-device port visibility table with latest SNMP rates and separate ingress and egress observations.
+
 ## v0.7.18
 
 - Link from port alert templates to the affected LibreNMS port and a window around the alert with previous-period comparison enabled.

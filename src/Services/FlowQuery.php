@@ -20,18 +20,7 @@ final class FlowQuery
             if (count($names) < 1 || count($names) > 13) {
                 throw new InvalidArgumentException('Invalid interface count');
             }
-            $names = array_values($names);
-            $quoted = [];
-            foreach ($names as $name) {
-                if (! is_string($name) || $name === '' || strlen($name) > 255
-                    || preg_match('/[\x00-\x1F\x7F]/', $name)) {
-                    throw new InvalidArgumentException('Invalid interface name');
-                }
-                $quoted[] = '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $name).'"';
-            }
-            if (count(array_unique($quoted)) !== count($quoted)) {
-                throw new InvalidArgumentException('Duplicate interface name');
-            }
+            $quoted = self::quotedInterfaces($names);
             $in = array_map(static fn ($q) => 'InIfName = '.$q, $quoted);
             $out = array_map(static fn ($q) => 'OutIfName = '.$q, $quoted);
             $part = match ($direction) {
@@ -47,6 +36,29 @@ final class FlowQuery
             $filter .= ' AND '.$clause;
         }
         return $filter;
+    }
+
+    public static function validInterfaceName(mixed $name): bool
+    {
+        return is_string($name) && $name !== '' && strlen($name) <= 255
+            && ! preg_match('/[\x00-\x1F\x7F]/', $name);
+    }
+
+    /** @return list<string> */
+    private static function quotedInterfaces(array $names): array
+    {
+        $quoted = [];
+        foreach ($names as $name) {
+            if (! self::validInterfaceName($name)) {
+                throw new InvalidArgumentException('Invalid interface name');
+            }
+            $quoted[] = '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $name).'"';
+        }
+        if (count(array_unique($quoted)) !== count($quoted)) {
+            throw new InvalidArgumentException('Duplicate interface name');
+        }
+
+        return $quoted;
     }
 
     /** Validate the only user-controlled traffic filters we support; never accept raw expressions. */
@@ -182,6 +194,28 @@ final class FlowQuery
         return array_replace(self::common($ip, $interfaceName, $minutes, $now, 'both', $focus, $start), [
             'dimensions' => array_values($dimensions), 'limit' => max(1, min(30, $limit)),
             'bidirectional' => false,
+        ]);
+    }
+
+    /** Restrict each direction to the page of names and request a group for every name. */
+    public static function interfaceVisibility(string $ip, array $names, string $direction, \DateTimeImmutable $start, \DateTimeImmutable $end): array
+    {
+        if ($names === [] || count($names) > 25) {
+            throw new InvalidArgumentException('Invalid interface visibility batch size');
+        }
+        $field = match ($direction) {
+            'ingress' => 'InIfName',
+            'egress' => 'OutIfName',
+            default => throw new InvalidArgumentException('Invalid interface visibility direction'),
+        };
+        $query = self::line($ip, null, 60, $end, 'pps', start: $start);
+        $matches = array_map(static fn (string $name) => $field.' = '.$name, self::quotedInterfaces($names));
+
+        return array_replace($query, [
+            'dimensions' => [$field],
+            'filter' => $query['filter'].' AND ('.implode(' OR ', $matches).')',
+            'limit' => count($names),
+            'points' => 5,
         ]);
     }
 

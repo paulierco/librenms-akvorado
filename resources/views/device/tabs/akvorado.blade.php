@@ -8,16 +8,21 @@
                 <div class="panel-body">
                     @php
                         $diagnostics = $data['diagnostics'] ?? null;
+                        $visibility = $data['visibility'] ?? null;
                         $windowParams = ['period' => $data['period']];
                         if ($data['bounds']) {
                             $windowParams += ['start' => $data['bounds']['start']->getTimestamp(), 'end' => $data['bounds']['end']->getTimestamp()];
                         }
                     @endphp
                     <div class="text-right" style="margin:-3px 0 12px">
+                        @if($diagnostics !== null || $visibility !== null)
+                            <a href="{{ route('device.akvorado', ['device' => $device->device_id] + $windowParams) }}" class="btn btn-default btn-sm">Back to traffic</a>
+                        @endif
+                        @if($visibility === null)
+                            <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'section' => 'port-visibility'] + $windowParams) }}" class="btn btn-default btn-sm">Port visibility</a>
+                        @endif
                         @if($diagnostics === null)
                             <a href="{{ route('device.akvorado', ['device' => $device->device_id, 'section' => 'diagnostics'] + $windowParams) }}" class="btn btn-default btn-sm">Flow diagnostics</a>
-                        @else
-                            <a href="{{ route('device.akvorado', ['device' => $device->device_id] + $windowParams) }}" class="btn btn-default btn-sm">Back to traffic</a>
                         @endif
                         @if(config('akvorado-flow.inventory_enabled', true))
                             <a href="{{ route('akvorado.exporters') }}" class="btn btn-default btn-sm"><i class="fa fa-list-alt"></i> Exporter inventory</a>
@@ -151,7 +156,9 @@
                     @endif
                 </div>
             </div>
-            @if($diagnostics !== null)
+            @if($visibility !== null)
+                @include('akvorado-flow::device.tabs.port-visibility', ['period' => $data['period']])
+            @elseif($diagnostics !== null)
                 @include('akvorado-flow::device.tabs.flow-diagnostics', ['period' => $data['period']])
             @else
                 @include('akvorado-flow::hooks.panel', [

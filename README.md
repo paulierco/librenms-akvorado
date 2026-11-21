@@ -9,6 +9,7 @@ A read-only LibreNMS plugin for investigating flow telemetry collected by Akvora
 - A communications map with interface, IP, and service views. The interface view can show only known paths or only paths with unknown ingress, with the excluded bitrate share shown alongside the diagram.
 - Fixed-time incident links that preserve the investigation filters. An optional link opens Akvorado Visualize with the same time window and flow filter.
 - Exporter diagnostics with query status, the latest nonzero flow bucket in the selected window, and the shares of observed L3 traffic with unknown ingress or egress.
+- A paginated port visibility table with each port’s latest SNMP rates and named ingress and egress observations in the selected window.
 - Selected-port SNMP counter history aligned to the investigation window, including traffic, errors, and discards. Flow-to-counter coverage estimates are available for comparable L2 traffic queries.
 - A paginated exporter inventory and an optional API for supplying LibreNMS interface metadata to Akvorado.
 
@@ -52,6 +53,12 @@ If LibreNMS uses cached configuration, rebuild or clear the configuration cache 
 Use **Copy incident link** on the Akvorado tab to share the time window shown on the page, including when the time range was originally a rolling preset. The link keeps the selected port, filters, and view and follows the same LibreNMS permissions and eight-day fixed-window lookback as graph zoom.
 
 Enable AKVORADO_FLOW_SHOW_LINK to open the scoped window directly in Akvorado Visualize. The configured Console URL must be reachable by the user's browser. The scoped link uses Akvorado's v1 visualization URL format, verified with v2026.10.1.
+
+## Check port visibility
+
+Open **Port visibility** from the device’s Akvorado tab to review 25 ports at a time. The table shows the latest LibreNMS SNMP rates and whether Akvorado reported each exact interface name in ingress and egress during the displayed window. Select a port name to investigate it over the same window.
+
+A **Not observed** result can reflect quiet traffic, sampling, or a missing interface name. **Unavailable** indicates that the response did not establish visibility for that direction. Ambiguous interface names are indicated separately.
 
 ## Investigate from a port alert
 
