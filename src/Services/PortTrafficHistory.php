@@ -227,7 +227,7 @@ final class PortTrafficHistory
             $colorIndex = 0;
             foreach ($sources as $id => $port) {
                 foreach (['snmp' => 'LibreNMS SNMP', 'flow' => 'Akvorado L2'] as $type => $label) {
-                    $values = array_map(static fn ($end) => self::intervalMean($port[$direction][$type], $end - $step, $end), $ends);
+                    $values = array_map(static fn ($end) => FlowFormatter::intervalStats($port[$direction][$type], $end - $step, $end)['mean'] ?? null, $ends);
                     $valuesByType[$type][] = $values;
                     $series[] = [
                         'label' => $comparison ? $ports[$id]['label'].' · '.$label : $label,
@@ -271,27 +271,6 @@ final class PortTrafficHistory
 
         return ['count' => $count, 'rates' => [$left / $count, $right / $count],
             'shares' => $total > 0 ? [100 * $left / $total, 100 * $right / $total] : null];
-    }
-
-    private static function intervalMean(array $series, int $from, int $end): ?float
-    {
-        if ($series === []) {
-            return null;
-        }
-        $step = $series['step'];
-        $origin = $series['origin'];
-        $first = $origin + (int)floor(($from - $origin) / $step) * $step;
-        $total = 0.0;
-        for ($slot = $first; $slot < $end; $slot += $step) {
-            $rate = $series['rates'][$slot] ?? null;
-            if ($rate === null) {
-                return null;
-            }
-            $seconds = min($end, $slot + $step) - max($from, $slot);
-            $total += $rate * $seconds;
-        }
-
-        return $total / ($end - $from);
     }
 
     private static function rate(mixed $value): ?float

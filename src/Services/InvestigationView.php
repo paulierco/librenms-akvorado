@@ -12,7 +12,7 @@ use InvalidArgumentException;
 final class InvestigationView
 {
     private const TRAFFIC_SECTIONS = ['traffic', 'talkers', 'flows', 'health', 'sankey'];
-    private const DEVICE_SECTIONS = ['diagnostics', 'port-visibility', 'historical-overlay', 'port-comparison'];
+    private const DEVICE_SECTIONS = ['diagnostics', 'port-visibility', 'historical-overlay', 'port-comparison', 'traffic-heatmap'];
 
     /** Keep only query parameters understood by the investigation route. */
     public static function query(array $input, ?array $bounds = null): array
@@ -31,6 +31,13 @@ final class InvestigationView
         }
         if (($port = self::portId($input['port'] ?? null)) !== null) {
             $params['port'] = $port;
+        }
+        if ($section === 'traffic-heatmap') {
+            $params['heatmap_days'] = TrafficHeatmap::lookback($input['heatmap_days'] ?? null);
+            if ($port !== null) {
+                $params['heatmap_direction'] = TrafficHeatmap::direction($input['heatmap_direction'] ?? null);
+            }
+            return $params;
         }
         if ($section === 'port-comparison' && ($second = self::portId($input['compare_port'] ?? null)) !== null) {
             $params['compare_port'] = $second;

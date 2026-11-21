@@ -201,6 +201,29 @@ final class FlowFormatter
         return $step;
     }
 
+    /** Time-weight a complete interval and retain the largest contributing bucket rate. */
+    public static function intervalStats(array $series, int $from, int $end): ?array
+    {
+        if ($series === [] || $end <= $from) {
+            return null;
+        }
+        $step = $series['step'];
+        $origin = $series['origin'];
+        $first = $origin + (int)floor(($from - $origin) / $step) * $step;
+        $total = 0.0;
+        $peak = 0.0;
+        for ($slot = $first; $slot < $end; $slot += $step) {
+            $rate = $series['rates'][$slot] ?? null;
+            if ($rate === null) {
+                return null;
+            }
+            $total += $rate * (min($end, $slot + $step) - max($from, $slot));
+            $peak = max($peak, $rate);
+        }
+
+        return ['mean' => $total / ($end - $from), 'peak' => $peak];
+    }
+
     private static function timeLabel(mixed $value): string
     {
         if (is_numeric($value)) {
