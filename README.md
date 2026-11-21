@@ -23,7 +23,7 @@ From the LibreNMS install directory, as the user that runs LibreNMS updates:
 
 ~~~sh
 composer config --global repositories.akvorado-flow vcs https://github.com/paulierco/librenms-akvorado.git
-./lnms plugin:add community/librenms-akvorado 0.7.16
+./lnms plugin:add community/librenms-akvorado 0.7.28
 ~~~
 
 The global Composer repository entry lets LibreNMS resolve the package again when it synchronizes plugins. LibreNMS records the package and version constraint in its Composer plugin list. [LibreNMS Composer plugin configuration](https://docs.librenms.org/Support/Environment-Variables/#composer-packages)
