@@ -32,9 +32,6 @@ final class AkvoradoTab implements DeviceTab
 
     public function data(Device $device, Request $request): array
     {
-        Gate::authorize('view', $device);
-        abort_unless($this->visible($device), 404);
-
         $data = $this->investigation($device, $request);
         $settings = [
             'section' => $request->query('section'), 'period' => $data['period'],
@@ -51,8 +48,10 @@ final class AkvoradoTab implements DeviceTab
         ];
     }
 
-    private function investigation(Device $device, Request $request): array
+    public function investigation(Device $device, Request $request): array
     {
+        Gate::authorize('view', $device);
+        abort_unless($this->visible($device), 404);
         $port = InvestigationView::authorizedPort($device, $request->query('port'));
         $section = $request->query('section');
         $lookback = $request->query('comparison_lookback');

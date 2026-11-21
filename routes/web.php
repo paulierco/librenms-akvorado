@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use LibreNMS\Plugins\AkvoradoFlow\Http\Controllers\AkvoradoDeviceController;
+use LibreNMS\Plugins\AkvoradoFlow\Http\Controllers\AkvoradoIncidentCsvController;
 use LibreNMS\Plugins\AkvoradoFlow\Http\Controllers\AkvoradoSavedViewController;
 
 // Register unconditionally so the route can be inspected in `artisan route:list`.
@@ -13,6 +14,11 @@ Route::middleware(['web', 'auth'])
     ->get('/device/{device}/akvorado', AkvoradoDeviceController::class)
     ->whereNumber('device')
     ->name('device.akvorado');
+
+Route::middleware(['web', 'auth'])
+    ->get('/device/{device}/akvorado/csv/{report}', AkvoradoIncidentCsvController::class)
+    ->whereNumber('device')
+    ->name('device.akvorado.csv');
 
 Route::middleware(['web', 'auth'])->group(function (): void {
     Route::post('/device/{device}/akvorado/saved-views', [AkvoradoSavedViewController::class, 'store'])

@@ -65,6 +65,9 @@
         return route('device.akvorado', ['device' => $panel['deviceId']] + $query);
     };
     $canDrill = ($panel['deviceId'] ?? 0) > 0;
+    $csvParams = $canDrill && config('akvorado-flow.device_tab', true) && isset($panel['windowStart'], $panel['windowEnd'])
+        ? ['device' => $panel['deviceId'], 'start' => $panel['windowStart'], 'end' => $panel['windowEnd']] + $baseParams
+        : null;
     $hasFocus = count($panel['focus'] ?? []) > 0;
     $focused = $panel['focus'] ?? [];
     $validIp = static fn ($value): bool => is_string($value) && $value !== '::' && (bool) filter_var($value, FILTER_VALIDATE_IP);
@@ -522,6 +525,9 @@
             <div class="akv-card akv-half akv-pad akv-section" data-akv-section="flows" hidden>
                 <h4>Top conversations</h4><div class="akv-card-sub">Average L3 bitrate over selected window</div>
                 @if(count($panel['conversations'] ?? []))
+                    @if($csvParams !== null)
+                        <a class="btn btn-default btn-xs" href="{{ route('device.akvorado.csv', ['report' => 'conversations'] + $csvParams) }}">Download conversations CSV</a>
+                    @endif
                     <div class="table-responsive"><table class="akv-table">
                         <thead><tr><th>Source</th><th>Destination</th><th>Avg L3 bitrate</th></tr></thead>
                         <tbody>
@@ -557,6 +563,9 @@
                 <h4>Conversation explorer — protocol and destination port</h4>
                 <div class="akv-card-sub">Top returned rows only; click an address or port to narrow the whole dashboard.</div>
                 @if(count($panel['detailedFlows'] ?? []))
+                    @if($csvParams !== null)
+                        <a class="btn btn-default btn-xs" href="{{ route('device.akvorado.csv', ['report' => 'detailed-flows'] + $csvParams) }}">Download detailed flows CSV</a>
+                    @endif
                     <div class="table-responsive"><table class="akv-table">
                         <thead><tr><th>Source IP</th><th>Destination IP</th><th>Protocol</th><th>Destination port</th><th>Avg L3 bitrate</th></tr></thead><tbody>
                         @foreach($panel['detailedFlows'] as $flow)
@@ -618,6 +627,9 @@
                     @if($filteredPaths['rows'] === [])
                         <div class="akv-empty">None of the ranked paths match this filter.</div>
                     @else
+                    @if($csvParams !== null)
+                        <a class="btn btn-default btn-xs" href="{{ route('device.akvorado.csv', ['report' => 'map'] + $csvParams) }}">Download map CSV</a>
+                    @endif
                     <div class="akv-sankey-frame" data-akv-sankey><svg role="img" aria-label="Sankey diagram of observed network traffic" viewBox="0 0 1100 400"></svg></div>
                     <div class="akv-sankey-legend">
                         Hover over a ribbon for the average bitrate. Click a labeled IP (or matched interface) to narrow the investigation.

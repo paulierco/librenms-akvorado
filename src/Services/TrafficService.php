@@ -97,14 +97,15 @@ final class TrafficService
         $now = $requestedBounds['end'] ?? new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         if ($requestedBounds === null) { $now = $now->setTime((int) $now->format('H'), (int) $now->format('i'), 0); }
         $start = $requestedBounds['start'] ?? null;
+        $windowStart = ($start ?? $now->modify('-'.$minutes.' minutes'))->getTimestamp();
         $isZoomed = $start !== null;
         $comparisonUnavailable = FlowCoverage::comparisonUnavailable($metric, $focus, $isZoomed);
 
         $scope = $port ? 'port'.(string) ($port->port_id ?? $index) : 'device';
         // Include the LAG flag so member-inclusive requests have their own cache entry.
-        $key = 'akvorado-flow-v0722:'.hash('sha256', json_encode([
+        $key = 'akvorado-flow-v0727:'.hash('sha256', json_encode([
             $exporter['ip'], $interfaceScope, $scope, $minutes, $metric, $dimension, $focus,
-            $now->getTimestamp(), $start?->getTimestamp(), $lagIncluded ? 'lag-members' : 'logical',
+            $now->getTimestamp(), $windowStart, $lagIncluded ? 'lag-members' : 'logical',
         ], JSON_THROW_ON_ERROR));
         try {
             $data = Cache::remember($key, (int) config('akvorado-flow.cache_seconds', 60), function () use ($exporter, $index, $interfaceName, $minutes, $now, $metric, $dimension, $focus, $start, $interfaceScope, $lagIncluded): array {
@@ -173,11 +174,11 @@ final class TrafficService
                     $packets = $metric === 'pps' && $interfaceScope === null ? $traffic : FlowFormatter::line($this->client->post('graph/line', FlowQuery::line($ip, $interfaceScope, $minutes, $now, 'pps', 'both', null, 10, $focus, $start)), 'pps', $minutes);
                 } catch (\Throwable $e) { $packets = null; $partial[] = 'Packets/sec not available'; }
                 try {
-                    $conversationPayload = $this->client->post('graph/sankey', FlowQuery::sankey($ip, $interfaceScope, $minutes, $now, ['SrcAddr', 'DstAddr'], 24, $focus, $start));
+                    $conversationPayload = $this->client->post('graph/sankey', FlowQuery::sankey($ip, $interfaceScope, $minutes, $now, ['SrcAddr', 'DstAddr'], FlowQuery::CONVERSATION_RANK_LIMIT, $focus, $start));
                     if (FlowFormatter::conversationRows($conversationPayload) === null) {
                         throw new \RuntimeException('Invalid conversation ranking response');
                     }
-                    $conversations = FlowFormatter::conversations($conversationPayload, 24);
+                    $conversations = FlowFormatter::conversations($conversationPayload, FlowQuery::CONVERSATION_RANK_LIMIT);
                 } catch (\Throwable $e) { $conversations = []; $partial[] = 'Conversations unavailable'; }
                 try {
                     $protocolPorts = FlowFormatter::protocolPorts($this->client->post('graph/sankey', FlowQuery::sankey($ip, $interfaceScope, $minutes, $now, ['Proto', 'DstPort'], 20, $focus, $start)), 20);
@@ -194,12 +195,14 @@ final class TrafficService
                     $ranks = FlowFormatter::rankings($this->client->post('graph/line', FlowQuery::line($ip, $interfaceScope, $minutes, $now, $metric, 'both', $dimension, 12, $focus, $start)), $metric, 12, $dimension);
                 } catch (\Throwable $e) { $ranks = []; $partial[] = 'Top grouped traffic unavailable'; }
                 try {
-                    $detailedFlows = FlowFormatter::detailedFlows(
-                        $this->client->post('graph/sankey', FlowQuery::sankey(
-                            $ip, $interfaceScope, $minutes, $now,
-                            ['SrcAddr', 'DstAddr', 'Proto', 'DstPort'], 25, $focus, $start
-                        )), 25
-                    );
+                    $payload = $this->client->post('graph/sankey', FlowQuery::sankey(
+                        $ip, $interfaceScope, $minutes, $now,
+                        ['SrcAddr', 'DstAddr', 'Proto', 'DstPort'], FlowQuery::DETAILED_FLOW_LIMIT, $focus, $start
+                    ));
+                    if (! is_array($payload['rows'] ?? null) || ! is_array($payload['xps'] ?? null) || count($payload['rows']) !== count($payload['xps'])) {
+                        throw new \RuntimeException('Invalid detailed conversation response');
+                    }
+                    $detailedFlows = FlowFormatter::detailedFlows($payload, FlowQuery::DETAILED_FLOW_LIMIT);
                 } catch (\Throwable $e) {
                     $detailedFlows = [];
                     $partial[] = 'Detailed conversations unavailable';
@@ -273,18 +276,21 @@ final class TrafficService
             if ($sankeyView !== null && $data['flowState'] === 'has_flows') {
                 // An independent cache means switching Sankey presets does not
                 // re-run the much more expensive core dashboard queries.
-                $sankeyKey = 'akvorado-sankey-v071:attribution-v2:'.hash('sha256', json_encode([
+                $sankeyKey = 'akvorado-sankey-v071:attribution-v3:'.hash('sha256', json_encode([
                     $exporter['ip'], $interfaceScope, $minutes, $focus,
-                    $now->getTimestamp(), $start?->getTimestamp(), $sankeyView,
+                    $now->getTimestamp(), $windowStart, $sankeyView,
                 ], JSON_THROW_ON_ERROR));
                 $sankeyResult = Cache::remember($sankeyKey, (int) config('akvorado-flow.cache_seconds', 60),
                     function () use ($exporter, $interfaceName, $minutes, $now, $focus, $start, $sankeyView, $interfaceScope): array {
                         try {
                             $dimensions = FlowQuery::sankeyPreset($sankeyView);
                             $response = $this->client->post('graph/sankey', FlowQuery::sankey(
-                                $exporter['ip'], $interfaceScope, $minutes, $now, $dimensions, 14, $focus, $start
+                                $exporter['ip'], $interfaceScope, $minutes, $now, $dimensions, FlowQuery::MAP_RANK_LIMIT, $focus, $start
                             ));
-                            return ['diagram' => SankeyDiagram::fromResponse($response, $dimensions, 32), 'failure' => null];
+                            if (! is_array($response['rows'] ?? null) || ! is_array($response['xps'] ?? null) || count($response['rows']) !== count($response['xps'])) {
+                                throw new \RuntimeException('Invalid communication map response');
+                            }
+                            return ['diagram' => SankeyDiagram::fromResponse($response, $dimensions), 'failure' => null];
                         } catch (\Throwable $e) {
                             $code = self::queryFailureCode($e);
                             Log::warning('Akvorado plugin: Sankey query failed', [
@@ -360,7 +366,7 @@ final class TrafficService
             $data['zoomEnd'] = $isZoomed ? $now->getTimestamp() : null;
             $data['focus'] = $focus;
             $data['filterExpression'] = FlowQuery::filter($exporter['ip'], $interfaceScope, 'both', $focus);
-            $data['windowStart'] = ($start ?? $now->modify('-'.$minutes.' minutes'))->getTimestamp();
+            $data['windowStart'] = $windowStart;
             $data['windowEnd'] = $now->getTimestamp();
             $data['lagMembers'] = $lagMembers;
             $data['lagIncluded'] = $lagIncluded;

@@ -56,6 +56,13 @@
                     {{ $history['step'] }}-second average buckets.
                 @endif
             </p>
+            @if($history['charts'] !== [])
+                <p><a class="btn btn-default btn-sm" href="{{ route('device.akvorado.csv', [
+                    'device' => $device->device_id, 'report' => 'port-comparison',
+                    'port' => $selectedPort->port_id, 'compare_port' => $portComparison['second']->port_id,
+                    'start' => $history['start'], 'end' => $history['end'], 'period' => $period,
+                ]) }}">Download port comparison CSV</a></p>
+            @endif
             <p class="text-muted">Each line covers the full selected port. Dashed lines show Akvorado’s sampled L2 estimates. Zero flow rate means no matching samples were reported. Gaps indicate unavailable data or incomplete intervals.</p>
             @if(!$history['exporterMapped'])
                 <p class="text-muted">No Akvorado exporter is mapped to this device.</p>
