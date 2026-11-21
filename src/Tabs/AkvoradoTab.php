@@ -1,0 +1,113 @@
+<?php
+
+declare(strict_types=1);
+
+namespace LibreNMS\Plugins\AkvoradoFlow\Tabs;
+
+use App\Models\Device;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use LibreNMS\Interfaces\UI\DeviceTab;
+use LibreNMS\Plugins\AkvoradoFlow\Services\FlowDiagnostics;
+use LibreNMS\Plugins\AkvoradoFlow\Services\FlowQuery;
+use LibreNMS\Plugins\AkvoradoFlow\Services\TrafficService;
+
+final class AkvoradoTab implements DeviceTab
+{
+    public function visible(Device $device): bool
+    {
+        return config('akvorado-flow.device_tab', true)
+            && (string) config('akvorado-flow.url', '') !== ''
+            && Gate::allows('view', $device);
+    }
+    public function slug(): string { return 'akvorado'; }
+    public function icon(): string { return 'fa-area-chart'; }
+    public function name(): string { return 'Akvorado'; }
+
+    public function data(Device $device, Request $request): array
+    {
+        Gate::authorize('view', $device);
+        abort_unless($this->visible($device), 404);
+
+        $port = null;
+        $portId = $request->query('port');
+        if ($portId !== null && (string) $portId !== '') {
+            abort_unless(ctype_digit((string) $portId) && (int) $portId > 0, 404);
+            $port = $device->ports()->where('port_id', (int) $portId)->first();
+            abort_unless($port !== null, 404);
+            Gate::authorize('view', $port);
+        }
+        $period = $request->query('period', (string) config('akvorado-flow.window_minutes', 60));
+        $minutes = FlowQuery::window(is_scalar($period) ? (int) $period : 60);
+        $metric = FlowQuery::metric(is_string($request->query('metric')) ? $request->query('metric') : 'l3bps');
+        $dimension = FlowQuery::dimension(is_string($request->query('dimension')) ? $request->query('dimension') : 'SrcAddr');
+        // Only narrow validated fields reach Akvorado; malformed user filters are rejected.
+        try {
+            $focus = FlowQuery::focus([
+                'src' => $request->query('src'), 'dst' => $request->query('dst'),
+                'host' => $request->query('host'),
+                'dst_port' => $request->query('dst_port'), 'proto' => $request->query('proto'),
+            ]);
+            $bounds = FlowQuery::bounds($request->query('start'), $request->query('end'));
+        } catch (\InvalidArgumentException $e) {
+            abort(422, 'Invalid Akvorado investigation filter or time range.');
+        }
+        if ($request->query('section') === 'diagnostics') {
+            return [
+                'diagnostics' => app(FlowDiagnostics::class)->forDevice($device, $minutes, $bounds),
+                'exporterReady' => false,
+                'period' => $minutes,
+                'bounds' => $bounds,
+            ];
+        }
+
+        $traffic = app(TrafficService::class);
+        $exporterStatus = $traffic->exporterStatus($device);
+        if ($exporterStatus !== 'confirmed') {
+            return [
+                'panel' => ['flowState' => 'exporter_'.$exporterStatus, 'deviceId' => (int) $device->device_id],
+                'exporterReady' => false,
+                'selectedPort' => $port,
+                'ports' => collect(),
+                'period' => $minutes,
+                'metric' => $metric,
+                'dimension' => $dimension,
+                'focus' => $focus,
+                'bounds' => $bounds,
+            ];
+        }
+
+        // Limit selector size. Selected port is resolved and authorized independently.
+        $max = min(1500, max(20, (int) config('akvorado-flow.max_ports_in_selector', 1500)));
+        $ports = $device->ports()->hasAccess(auth()->user())->where('ifIndex', '>', 0)
+            ->orderBy('ifName')->limit($max)->get(['port_id','ifIndex','ifName','ifAlias']);
+
+        // The selected Sankey preset is loaded on demand and allowlisted server-side.
+        $showSankey = $request->query('section') === 'sankey';
+        $sankeyView = FlowQuery::sankeyMode(is_string($request->query('sankey_view')) ? $request->query('sankey_view') : 'ports');
+        $panel = $traffic->panel($device, $port, $minutes, $metric, $dimension, $focus, $bounds, $showSankey ? $sankeyView : null, $port !== null && $request->query('lag_members') === '1');
+        if ($showSankey) {
+            // Only authorized, visible ports may be targets of Sankey click-through.
+            // Ignore ambiguous ifNames; never pick a random port from a stack.
+            $names = []; $duplicates = [];
+            foreach ($ports as $candidate) {
+                $name = (string) ($candidate->ifName ?? '');
+                if ($name === '') { continue; }
+                if (isset($names[$name])) { $duplicates[$name] = true; }
+                $names[$name] = (int) $candidate->port_id;
+            }
+            foreach ($duplicates as $name => $_) { unset($names[$name]); }
+            $panel['sankeyPortMap'] = $names;
+        }
+        return [
+            'panel' => $panel,
+            'exporterReady' => true,
+            'selectedPort' => $port,
+            'ports' => $ports,
+            'period' => $minutes,
+            'metric' => $metric,
+            'dimension' => $dimension,
+            'focus' => $focus, 'bounds' => $bounds,
+        ];
+    }
+}

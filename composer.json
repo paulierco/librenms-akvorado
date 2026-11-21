@@ -1,0 +1,33 @@
+{
+  "name": "community/librenms-akvorado",
+  "description": "Read-only Akvorado analytics via dedicated LibreNMS device tab and port Plugins tab",
+  "type": "library",
+  "license": "MIT",
+  "keywords": [
+    "librenms",
+    "akvorado",
+    "flow",
+    "plugin"
+  ],
+  "require": {
+    "php": "^8.2",
+    "ext-json": "*",
+    "librenms/plugin-interfaces": "^1.0",
+    "illuminate/support": "^11.0 || ^12.0 || ^13.0",
+    "illuminate/http": "^11.0 || ^12.0 || ^13.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "LibreNMS\\Plugins\\AkvoradoFlow\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "LibreNMS\\Plugins\\AkvoradoFlow\\AkvoradoFlowServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

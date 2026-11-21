@@ -1,0 +1,9 @@
+/vendor/
+/node_modules/
+.env
+.env.*
+*.log
+*.tgz
+*.tar.gz
+*.zip
+.DS_Store
