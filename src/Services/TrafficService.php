@@ -71,7 +71,7 @@ final class TrafficService
     }
 
     /** @return array<string,mixed> */
-    public function panel(object $device, ?object $port = null, ?int $requestedMinutes = null, string $requestedMetric = 'l3bps', string $requestedDimension = 'SrcAddr', array $requestedFocus = [], ?array $requestedBounds = null, ?string $sankeyView = null, bool $includeLagMembers = false): array
+    public function panel(object $device, ?object $port = null, ?int $requestedMinutes = null, string $requestedMetric = 'l3bps', string $requestedDimension = 'SrcAddr', array $requestedFocus = [], ?array $requestedBounds = null, ?string $sankeyView = null, bool $includeLagMembers = false, bool $comparePrevious = false): array
     {
         $exporter = $this->resolver->resolve($device);
         if (! $exporter) { return ['ok' => false, 'message' => 'No exporter mapping for this device.']; }
@@ -232,7 +232,7 @@ final class TrafficService
                     'requested' => 'lag-members',
                 ]);
                 return $this->panel($device, $port, $requestedMinutes, $requestedMetric,
-                    $requestedDimension, $requestedFocus, $requestedBounds, $sankeyView, true);
+                    $requestedDimension, $requestedFocus, $requestedBounds, $sankeyView, true, $comparePrevious);
             }
             // Optional LAG-member attribution charts: one grouped line API call
             // per direction, only when the operator selects member-inclusive mode.
@@ -294,6 +294,12 @@ final class TrafficService
                 $data['sankeyFailure'] = $sankeyResult['failure'];
             }
             $data['sankeyView'] = $sankeyView;
+            if ($comparePrevious) {
+                $data['periodComparison'] = (new PeriodComparison($this->client))->forPanel(
+                    $data, $exporter['ip'], $interfaceScope, $minutes, $metric, $focus,
+                    $start ?? $now->modify('-'.$minutes.' minutes'), $now
+                );
+            }
             // SNMP interface counters are read independently of the flow cache.
             // An Akvorado API timeout does not affect these values.
             $data['snmp'] = $port !== null ? PortHealth::snapshot($port) : null;
@@ -361,6 +367,9 @@ final class TrafficService
             }
             if ($sankeyView !== null) {
                 $data['queryArgs']['sankey_view'] = $sankeyView;
+            }
+            if ($comparePrevious) {
+                $data['queryArgs']['compare'] = 'previous';
             }
             return $data;
         } catch (\Throwable $e) {

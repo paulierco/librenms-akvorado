@@ -85,7 +85,10 @@ final class AkvoradoTab implements DeviceTab
         // The selected Sankey preset is loaded on demand and allowlisted server-side.
         $showSankey = $request->query('section') === 'sankey';
         $sankeyView = FlowQuery::sankeyMode(is_string($request->query('sankey_view')) ? $request->query('sankey_view') : 'ports');
-        $panel = $traffic->panel($device, $port, $minutes, $metric, $dimension, $focus, $bounds, $showSankey ? $sankeyView : null, $port !== null && $request->query('lag_members') === '1');
+        $panel = $traffic->panel(
+            $device, $port, $minutes, $metric, $dimension, $focus, $bounds, $showSankey ? $sankeyView : null,
+            $port !== null && $request->query('lag_members') === '1', $request->query('compare') === 'previous'
+        );
         if ($showSankey) {
             // Only authorized, visible ports may be targets of Sankey click-through.
             // Ignore ambiguous ifNames; never pick a random port from a stack.

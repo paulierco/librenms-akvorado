@@ -14,12 +14,13 @@
     foreach ($mainCurves as $name => $curve) {
         $mainSeries[] = ['label' => $name, 'values' => array_values($curve['plot'] ?? $curve['samples'] ?? [])];
     }
+    $periodComparison = $panel['periodComparison'] ?? null;
     $chartPayload = [
         'main' => [
             'labels' => array_values($firstCurve['plotLabels'] ?? $firstCurve['labels'] ?? []),
-            'series' => $mainSeries,
+            'series' => array_merge($mainSeries, $periodComparison['series'] ?? []),
             'unit' => $metric,
-            'timestamps' => array_values($firstCurve['timestamps'] ?? []),
+            'timestamps' => array_values($firstCurve['plotTimestamps'] ?? []),
             'partialTailExcluded' => !empty($firstCurve['partialTailExcluded']),
         ],
         'ports' => [
@@ -250,6 +251,18 @@
                 <p class="akv-card-sub">An empty result can occur even when flow export is enabled.</p>
             @endunless
         </div>
+        @if($periodComparison !== null)
+            <div class="akv-info">
+                @if($periodComparison['observed'])
+                    Akvorado returned flows from the previous period.
+                @elseif($periodComparison['unavailable'] !== [])
+                    Previous-period traffic was unavailable for {{ implode(', ', $periodComparison['unavailable']) }}.
+                @else
+                    Akvorado returned no observed traffic for the previous period.
+                @endif
+                {{ $periodComparison['start'] }} to {{ $periodComparison['end'] }} UTC.
+            </div>
+        @endif
         @if(!empty($panel['partial']))<div class="alert alert-info">Some directions or optional queries were unavailable: {{ implode('; ', $panel['partial']) }}.</div>@endif
         <div class="akv-grid">@include('akvorado-flow::hooks.snmp-history', ['panel' => $panel])</div>
     @else
@@ -329,6 +342,9 @@
                     <div class="akv-empty">No time-series data for this selection. The exporter may not report this interface.</div>
                 @endif
             </div>
+            @if($periodComparison !== null)
+                @include('akvorado-flow::hooks.period-comparison')
+            @endif
             <div class="akv-card akv-small akv-pad akv-section" data-akv-section="traffic health">
                 <h4>Exporter &amp; coverage</h4>
                 <div class="akv-card-sub">Details for the current query scope</div>
@@ -553,7 +569,7 @@
                 <div class="akv-card-sub">Ribbon width represents average observed L3 bits/sec for the leading ranked paths. Not a verified physical forwarding path.</div>
                 <form class="akv-sankey-controls" method="get" action="{{ $canDrill ? route('device.akvorado', ['device' => $panel['deviceId']]) : '' }}" style="margin:14px 0 12px">
                     @foreach(($panel['queryArgs'] ?? []) as $field=>$value)
-                        @if(in_array($field, ['port','period','metric','dimension','host','src','dst','dst_port','proto','start','end','lag_members'], true) && is_scalar($value))
+                        @if(in_array($field, ['port','period','metric','dimension','host','src','dst','dst_port','proto','start','end','lag_members','compare'], true) && is_scalar($value))
                             <input type="hidden" name="{{ $field }}" value="{{ $value }}" />
                         @endif
                     @endforeach

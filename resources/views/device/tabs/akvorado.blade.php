@@ -94,6 +94,9 @@
                             <input type="hidden" name="start" value="{{ $data['bounds']['start']->getTimestamp() }}" class="akv-fixed-start" />
                             <input type="hidden" name="end" value="{{ $data['bounds']['end']->getTimestamp() }}" class="akv-fixed-end" />
                         @endif
+                        <div class="checkbox">
+                            <label><input type="checkbox" name="compare" value="previous" @checked(request()->query('compare') === 'previous')> Compare with previous period</label>
+                        </div>
                         <button class="btn btn-primary" type="submit">Investigate</button>
                         @if($data['bounds'] || count($data['focus']))
                             <a class="btn btn-default" href="{{ route('device.akvorado', ['device'=>$device->device_id] + array_filter(['port'=>$data['selectedPort']->port_id ?? null])) }}">Reset investigation</a>
