@@ -11,6 +11,14 @@ final class FlowQuery
 {
     public const CONVERSATION_RECHECK_LIMIT = 8;
 
+    private const BASE_DIMENSIONS = ['SrcAddr' => 'Source IP', 'DstAddr' => 'Destination IP', 'DstPort' => 'Destination port', 'SrcAS' => 'Source AS'];
+    private const OPTIONAL_DIMENSIONS = [
+        'SrcNetPrefix' => 'Reported source prefix', 'DstNetPrefix' => 'Reported destination prefix',
+        'SrcVlan' => 'Source VLAN', 'DstVlan' => 'Destination VLAN',
+        'SrcMAC' => 'Source MAC', 'DstMAC' => 'Destination MAC',
+    ];
+    private const L2_FIELDS = ['src_vlan' => 'SrcVlan', 'dst_vlan' => 'DstVlan', 'src_mac' => 'SrcMAC', 'dst_mac' => 'DstMAC'];
+
     public static function filter(string $ip, string|array|null $interfaceName = null, string $direction = 'both', array $focus = []): string
     {
         if (! filter_var($ip, FILTER_VALIDATE_IP)) { throw new InvalidArgumentException('Invalid exporter address'); }
@@ -70,22 +78,58 @@ final class FlowQuery
         foreach (['src', 'dst', 'host'] as $field) {
             $value = $input[$field] ?? null;
             if ($value === null || $value === '') { continue; }
-            if (! is_string($value) || strlen($value) > 45 || ! filter_var($value, FILTER_VALIDATE_IP)) {
-                throw new InvalidArgumentException('Invalid '.$field.' IP address');
+            if (! is_string($value) || ($address = self::addressOrPrefix($value)) === null) {
+                throw new InvalidArgumentException('Invalid '.$field.' IP address or CIDR');
             }
-            $result[$field] = $value;
+            $result[$field] = $address;
         }
-        foreach (['dst_port' => 65535, 'proto' => 255] as $field => $max) {
+        foreach (['dst_port' => 65535, 'proto' => 255, 'src_vlan' => 4094, 'dst_vlan' => 4094] as $field => $max) {
             $value = $input[$field] ?? null;
             if ($value === null || $value === '') { continue; }
             if (! is_string($value) && ! is_int($value)) { throw new InvalidArgumentException('Invalid numeric filter'); }
             $value = (string) $value;
-            if (! preg_match('/\A[0-9]{1,5}\z/D', $value) || (int) $value > $max) {
+            if (! preg_match('/\A[0-9]{1,5}\z/D', $value) || (int) $value > $max
+                || ((int) $value === 0 && isset(self::L2_FIELDS[$field]))) {
                 throw new InvalidArgumentException('Invalid numeric filter');
             }
             $result[$field] = (string) (int) $value;
         }
+        foreach (['src_mac', 'dst_mac'] as $field) {
+            $value = $input[$field] ?? null;
+            if ($value === null || $value === '') { continue; }
+            if (! is_string($value) || ! preg_match('/\A(?:[0-9a-f]{2}(?::[0-9a-f]{2}){5}|[0-9a-f]{2}(?:-[0-9a-f]{2}){5}|[0-9a-f]{4}(?:\.[0-9a-f]{4}){2})\z/i', $value)) {
+                throw new InvalidArgumentException('Invalid MAC address');
+            }
+            $result[$field] = implode(':', str_split(strtolower(str_replace([':', '-', '.'], '', $value)), 2));
+        }
         return $result;
+    }
+
+    public static function addressOrPrefix(string $value): ?string
+    {
+        if (strlen($value) > 49) {
+            return null;
+        }
+        [$address, $length] = array_pad(explode('/', $value, 2), 2, null);
+        if (! filter_var($address, FILTER_VALIDATE_IP)) {
+            return null;
+        }
+        if ($length === null) {
+            return $address;
+        }
+        $packed = inet_pton($address);
+        if (! preg_match('/\A[0-9]{1,3}\z/', $length) || (int) $length > strlen($packed) * 8) {
+            return null;
+        }
+        $bits = (int) $length;
+        $bytes = strlen($packed);
+        $full = intdiv($bits, 8);
+        $network = substr($packed, 0, $full);
+        if ($bits % 8 !== 0) {
+            $network .= chr(ord($packed[$full]) & (0xff << (8 - $bits % 8)));
+        }
+
+        return inet_ntop(str_pad($network, $bytes, "\0")).'/'.$bits;
     }
 
     private static function focusClauses(array $focus): array
@@ -95,7 +139,7 @@ final class FlowQuery
         if (isset($safe['host'])) {
             $parts[] = '(SrcAddr = '.$safe['host'].' OR DstAddr = '.$safe['host'].')';
         }
-        foreach (['src' => 'SrcAddr', 'dst' => 'DstAddr', 'dst_port' => 'DstPort', 'proto' => 'Proto'] as $key => $column) {
+        foreach (['src' => 'SrcAddr', 'dst' => 'DstAddr', 'dst_port' => 'DstPort', 'proto' => 'Proto'] + self::L2_FIELDS as $key => $column) {
             if (isset($safe[$key])) { $parts[] = $column.' = '.$safe[$key]; }
         }
         return $parts;
@@ -135,7 +179,53 @@ final class FlowQuery
 
     public static function dimension(string $dimension): string
     {
-        return in_array($dimension, ['SrcAddr', 'DstAddr', 'DstPort', 'SrcAS'], true) ? $dimension : 'SrcAddr';
+        return isset(self::BASE_DIMENSIONS[$dimension]) || isset(self::OPTIONAL_DIMENSIONS[$dimension]) ? $dimension : 'SrcAddr';
+    }
+
+    public static function dimensionOptions(array $advertised): array
+    {
+        return self::BASE_DIMENSIONS + array_filter(self::OPTIONAL_DIMENSIONS,
+            static fn ($field) => in_array($field, $advertised, true), ARRAY_FILTER_USE_KEY);
+    }
+
+    public static function layer2Options(array $dimensions): array
+    {
+        $options = [];
+        foreach (self::L2_FIELDS as $field => $column) {
+            if (isset($dimensions[$column])) {
+                $options[$field] = $dimensions[$column];
+            }
+        }
+
+        return $options;
+    }
+
+    public static function filterLabels(?array $dimensions = null): array
+    {
+        return ['host' => 'Host', 'src' => 'Source', 'dst' => 'Destination', 'dst_port' => 'Dst port', 'proto' => 'Protocol']
+            + self::layer2Options($dimensions ?? self::OPTIONAL_DIMENSIONS);
+    }
+
+    /** Rank drilling uses the same validation as the corresponding filter input. */
+    public static function rankingFilter(string $dimension, string $label): array
+    {
+        $fields = ['SrcAddr' => 'src', 'DstAddr' => 'dst', 'DstPort' => 'dst_port', 'SrcNetPrefix' => 'src', 'DstNetPrefix' => 'dst']
+            + array_flip(self::L2_FIELDS);
+        if (! isset($fields[$dimension]) || in_array($label, ['', 'Other', '::'], true)
+            || (in_array($dimension, ['SrcNetPrefix', 'DstNetPrefix'], true) && ! str_contains($label, '/'))) {
+            return [];
+        }
+        try {
+            $filter = self::focus([$fields[$dimension] => $label]);
+            return in_array(reset($filter), ['::/0', '0.0.0.0/0', '00:00:00:00:00:00'], true) ? [] : $filter;
+        } catch (InvalidArgumentException) {
+            return [];
+        }
+    }
+
+    public static function isOptionalDimension(string $dimension): bool
+    {
+        return isset(self::OPTIONAL_DIMENSIONS[$dimension]);
     }
 
     /** @return array<string,mixed> */
@@ -208,11 +298,12 @@ final class FlowQuery
         $query = self::sankey($ip, $interfaceName, 60, $end, ['SrcAddr', 'DstAddr'], count($pairs), $focus, $start);
         $matches = [];
         foreach ($pairs as $pair) {
-            $addresses = self::focus(['src' => $pair['source'] ?? null, 'dst' => $pair['destination'] ?? null]);
-            if (! isset($addresses['src'], $addresses['dst'])) {
+            $source = $pair['source'] ?? null;
+            $destination = $pair['destination'] ?? null;
+            if (! filter_var($source, FILTER_VALIDATE_IP) || ! filter_var($destination, FILTER_VALIDATE_IP)) {
                 throw new InvalidArgumentException('Conversation recheck requires both endpoints');
             }
-            $matches[] = '(SrcAddr = '.$addresses['src'].' AND DstAddr = '.$addresses['dst'].')';
+            $matches[] = '(SrcAddr = '.$source.' AND DstAddr = '.$destination.')';
         }
         $query['filter'] .= ' AND ('.implode(' OR ', $matches).')';
 

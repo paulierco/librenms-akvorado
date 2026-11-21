@@ -102,6 +102,40 @@ foreach ([['src'=>'1.1.1.1 OR true'], ['dst'=>['192.0.2.1']], ['dst_port'=>'443 
     try { FlowQuery::focus($bad); check(false,'reject malicious focus'); }
     catch (InvalidArgumentException) { check(true,'reject malicious focus'); }
 }
+$networkFocus = FlowQuery::focus([
+    'src' => '192.0.2.147/25', 'dst' => '2001:db8:0:0:8123::1/65',
+    'host' => '198.51.100.9/24', 'src_vlan' => '0042', 'dst_mac' => '0011.2233.44FF',
+]);
+$networkFilter = FlowQuery::filter('192.0.2.10', '1/1/13', 'out', $networkFocus);
+check($networkFocus === ['src' => '192.0.2.128/25', 'dst' => '2001:db8:0:0:8000::/65',
+    'host' => '198.51.100.0/24', 'src_vlan' => '42', 'dst_mac' => '00:11:22:33:44:ff']
+    && str_contains($networkFilter, '(SrcAddr = 198.51.100.0/24 OR DstAddr = 198.51.100.0/24)')
+    && str_contains($networkFilter, 'OutIfName = "1/1/13"')
+    && str_contains($networkFilter, 'SrcVlan = 42 AND DstMAC = 00:11:22:33:44:ff'),
+    'CIDR and Layer 2 filters normalize and preserve selected exporter and direction');
+foreach ([['src' => '192.0.2.1/33'], ['dst' => '2001:db8::/129'], ['host' => '192.0.2.0/24 OR true'],
+    ['src_vlan' => '0'], ['dst_vlan' => '4095'], ['src_mac' => '00:22-33:44:55:66'], ['dst_mac' => '01:23:45:67:89:ab AND 1']] as $bad) {
+    try { FlowQuery::focus($bad); check(false, 'reject invalid optional filters'); }
+    catch (InvalidArgumentException) { check(true, 'reject invalid optional filters'); }
+}
+$advertised = FlowQuery::dimensionOptions(['SrcAddr', 'SrcNetPrefix', 'DstMAC', 'SrcVlan', 'ArbitrarySchemaField']);
+check(isset($advertised['SrcNetPrefix'], $advertised['DstMAC'], $advertised['SrcVlan'])
+    && ! isset($advertised['DstVlan'], $advertised['ArbitrarySchemaField'])
+    && FlowQuery::layer2Options($advertised) === ['src_vlan' => 'Source VLAN', 'dst_mac' => 'Destination MAC'],
+    'only supported server-advertised optional dimensions and their filters are exposed');
+check(FlowQuery::line('192.0.2.10', null, 60, $now, dimension: 'DstMAC')['dimensions'] === ['DstMAC']
+    && FlowQuery::rankingFilter('SrcNetPrefix', '198.51.100.9/24') === ['src' => '198.51.100.0/24']
+    && FlowQuery::rankingFilter('DstMAC', '00-11-22-33-44-FF') === ['dst_mac' => '00:11:22:33:44:ff']
+    && FlowQuery::rankingFilter('SrcVlan', '0') === []
+    && FlowQuery::rankingFilter('DstNetPrefix', '::/0') === [],
+    'optional rankings drill into valid values and omit placeholder groups');
+try {
+    FlowQuery::conversationPresence('192.0.2.10', null, [],
+        [['source' => '192.0.2.0/24', 'destination' => '192.0.2.1']], $now->modify('-1 hour'), $now);
+    check(false, 'conversation rechecks require exact addresses');
+} catch (InvalidArgumentException) {
+    check(true, 'conversation rechecks require exact addresses');
+}
 $zoom=FlowQuery::bounds('1795172400','1795176000',1795176100);
 check($zoom !== null && $zoom['start']->getTimestamp()===1795172400 && $zoom['end']->getTimestamp()===1795176000, 'validated zoom bounds');
 $zoomed=FlowQuery::line('192.0.2.10','1/1/13',60,$zoom['end'],'l3bps','out',null,10,$focus,$zoom['start']);

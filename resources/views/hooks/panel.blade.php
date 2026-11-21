@@ -75,7 +75,6 @@
         'diagram' => array_replace($sankey, ['rows' => $filteredPaths['rows']]),
         'ports' => $panel['sankeyPortMap'] ?? [],
     ];
-    $rankField = ['SrcAddr'=>'src','DstAddr'=>'dst','DstPort'=>'dst_port'][$panel['dimension'] ?? 'SrcAddr'] ?? null;
 
 @endphp
 <div class="akv-viz" data-akv-initialized="false" data-akv-initial-section="{{ $selectedSection }}" data-akv-sankey-loaded="{{ !empty($panel['sankeyView']) ? 'true' : 'false' }}" data-akv-sankey-view="{{ $sankeyView }}" data-akv-base-url="{{ $canDrill ? route('device.akvorado', ['device'=>$panel['deviceId']] + $baseParams) : '' }}">
@@ -262,6 +261,12 @@
         @if(!empty($panel['partial']))<div class="alert alert-info">Some directions or optional queries were unavailable: {{ implode('; ', $panel['partial']) }}.</div>@endif
         <div class="akv-grid">@include('akvorado-flow::hooks.snmp-history', ['panel' => $panel])</div>
     @else
+        @php
+            $queryBuilder = \LibreNMS\Plugins\AkvoradoFlow\Services\FlowQuery::class;
+            $filterLabels = $queryBuilder::filterLabels();
+            $rankDimension = $panel['dimension'] ?? 'SrcAddr';
+            $optionalRank = $queryBuilder::isOptionalDimension($rankDimension);
+        @endphp
         @if(!empty($panel['partial']))
             <div class="alert alert-info">Some optional charts could not be loaded: {{ implode('; ', $panel['partial']) }}.</div>
         @endif
@@ -275,12 +280,12 @@
         @if($hasFocus || !empty($panel['zoomed']))
             <div class="akv-filters"><strong style="font-size:12px">Active investigation:</strong>
                 @foreach($focused as $field=>$value)
-                    <a class="akv-chip" data-akv-filter-link href="{{ $drillUrl([$field=>null]) }}" title="Remove this filter">{{ ['host'=>'Host','src'=>'Source','dst'=>'Destination','dst_port'=>'Dst port','proto'=>'Protocol'][$field] ?? $field }}: {{ $value }} ×</a>
+                    <a class="akv-chip" data-akv-filter-link href="{{ $drillUrl([$field=>null]) }}" title="Remove this filter">{{ $filterLabels[$field] ?? $field }}: {{ $value }} ×</a>
                 @endforeach
                 @if(!empty($panel['zoomed']))
                     <a class="akv-chip" data-akv-filter-link href="{{ $drillUrl(['start'=>null, 'end'=>null]) }}" title="Clear zoom">Time zoom ×</a>
                 @endif
-                <a class="akv-link" data-akv-filter-link href="{{ $drillUrl(['host'=>null,'src'=>null,'dst'=>null,'dst_port'=>null,'proto'=>null,'start'=>null,'end'=>null]) }}">Clear filters and zoom</a>
+                <a class="akv-link" data-akv-filter-link href="{{ $drillUrl(array_fill_keys(array_keys($focused), null) + ['start'=>null,'end'=>null]) }}">Clear filters and zoom</a>
             </div>
         @endif
         <div class="akv-grid">
@@ -485,21 +490,28 @@
             </div>
 
             <div class="akv-card akv-half akv-pad akv-section" data-akv-section="talkers" hidden>
-                <h4>Top {{ ['SrcAddr'=>'source IPs','DstAddr'=>'destination IPs','DstPort'=>'destination ports','SrcAS'=>'source ASNs'][$panel['dimension'] ?? 'SrcAddr'] ?? 'groups' }}</h4>
+                <h4>Top by {{ $queryBuilder::dimensionOptions([$rankDimension])[$rankDimension] ?? 'group' }}</h4>
                 <div class="akv-card-sub">Akvorado-ranked results for current time and interface filter</div>
                 @php $rankings = $panel['rankings'] ?? []; $rankPlaceholder = $fmt::rankingsArePlaceholder($rankings); @endphp
-                @if($rankPlaceholder)
+                @if($rankPlaceholder && $optionalRank)
+                    <p class="akv-info">No specific values were reported for this grouping in the selected window.</p>
+                @elseif($rankPlaceholder)
                     <div class="akv-info" style="margin-top:9px">
                         <strong>No usable AS ranking:</strong>
                         Akvorado returned only placeholder rows for this grouping. Try ranking by source IP, destination IP, or destination port. For AS rankings, check the collector’s ASN metadata.
                     </div>
                 @endif
                 @forelse(($panel['rankings'] ?? []) as $entry)
-                    @php $maxRank = max(1.0, (float)($panel['rankings'][0]['value'] ?? 1)); @endphp
+                    @php
+                        $maxRank = max(1.0, (float)($panel['rankings'][0]['value'] ?? 1));
+                        $rankFilter = $queryBuilder::rankingFilter($rankDimension, $entry['label']);
+                    @endphp
                     <div class="akv-row">
                         <span class="akv-row-label" title="{{ $entry['label'] }}">
-                            @if($canDrill && $rankField && empty($entry['isOther']) && (($rankField === 'dst_port' && $validPort($entry['label'])) || ($rankField !== 'dst_port' && $validIp($entry['label']))))
-                                <a data-akv-filter-link href="{{ $drillUrl([$rankField => (string)$entry['label']]) }}">{{ $entry['label'] }}</a>
+                            @if($canDrill && $rankFilter !== [])
+                                <a data-akv-filter-link href="{{ $drillUrl($rankFilter) }}">{{ $entry['label'] }}</a>
+                            @elseif($optionalRank && !empty($entry['isUnresolved']) && empty($entry['isOther']))
+                                Unreported
                             @else {{ $entry['label'] }}{{ !empty($entry['isOther']) ? ' (remainder)' : '' }} @endif
                         </span>
                         <div style="width:32%;min-width:60px"><div class="akv-meter"><span style="width:{{ min(100, 100 * ((float)$entry['value']) / $maxRank) }}%"></span></div></div>
@@ -564,7 +576,7 @@
                 <div class="akv-card-sub">Ribbon width represents average observed L3 bits/sec for the leading ranked paths. Not a verified physical forwarding path.</div>
                 <form class="akv-sankey-controls" method="get" action="{{ $canDrill ? route('device.akvorado', ['device' => $panel['deviceId']]) : '' }}" style="margin:14px 0 12px">
                     @foreach(($panel['queryArgs'] ?? []) as $field=>$value)
-                        @if(in_array($field, ['port','period','metric','dimension','host','src','dst','dst_port','proto','start','end','lag_members','compare'], true) && is_scalar($value))
+                        @if((in_array($field, ['port','period','metric','dimension','start','end','lag_members','compare'], true) || isset($filterLabels[$field])) && is_scalar($value))
                             <input type="hidden" name="{{ $field }}" value="{{ $value }}" />
                         @endif
                     @endforeach

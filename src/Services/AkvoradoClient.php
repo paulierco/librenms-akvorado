@@ -4,24 +4,35 @@ declare(strict_types=1);
 
 namespace LibreNMS\Plugins\AkvoradoFlow\Services;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 final class AkvoradoClient
 {
-    /**
-     * Fetch an allowlisted Akvorado Console read-only widget.
-     * This is separate from flow queries: "widget/exporters" lists known
-     * exporter identities and does NOT establish that they are sending now.
-     * @return array<string,mixed>
-     */
+    /** Fetch allowlisted read-only Console metadata. */
     public function get(string $endpoint): array
     {
-        if ($endpoint !== 'widget/exporters') {
+        if (! in_array($endpoint, ['widget/exporters', 'configuration'], true)) {
             throw new RuntimeException('Unsupported Akvorado endpoint');
         }
         $response = $this->httpRequest()->get($this->baseUrl().'/api/v0/console/'.$endpoint);
         return $this->responseJson($response);
+    }
+
+    public function investigationDimensions(): array
+    {
+        $key = 'akvorado-investigation-dimensions-v1:'.hash('sha256', (string) config('akvorado-flow.url'));
+        return Cache::remember($key, 300, function (): array {
+            try {
+                $dimensions = $this->get('configuration')['dimensions'] ?? null;
+                return is_array($dimensions) && array_is_list($dimensions)
+                    ? array_values(array_filter($dimensions, 'is_string')) : [];
+            } catch (RuntimeException|ConnectionException) {
+                return [];
+            }
+        });
     }
 
     /** @return array<string,mixed> */

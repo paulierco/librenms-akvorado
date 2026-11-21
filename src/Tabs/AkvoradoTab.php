@@ -8,6 +8,7 @@ use App\Models\Device;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use LibreNMS\Interfaces\UI\DeviceTab;
+use LibreNMS\Plugins\AkvoradoFlow\Services\AkvoradoClient;
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowDiagnostics;
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowQuery;
 use LibreNMS\Plugins\AkvoradoFlow\Services\PortAlertInvestigation;
@@ -46,11 +47,7 @@ final class AkvoradoTab implements DeviceTab
         $dimension = FlowQuery::dimension(is_string($request->query('dimension')) ? $request->query('dimension') : 'SrcAddr');
         // Only narrow validated fields reach Akvorado; malformed user filters are rejected.
         try {
-            $focus = FlowQuery::focus([
-                'src' => $request->query('src'), 'dst' => $request->query('dst'),
-                'host' => $request->query('host'),
-                'dst_port' => $request->query('dst_port'), 'proto' => $request->query('proto'),
-            ]);
+            $focus = FlowQuery::focus($request->query());
             $bounds = FlowQuery::bounds($request->query('start'), $request->query('end'));
             if ($bounds === null && $request->query('alert_at') !== null) {
                 if ($port === null) {
@@ -107,6 +104,12 @@ final class AkvoradoTab implements DeviceTab
             ];
         }
 
+        $dimensions = FlowQuery::dimensionOptions(app(AkvoradoClient::class)->investigationDimensions());
+        $layer2Options = FlowQuery::layer2Options($dimensions);
+        abort_unless(isset($dimensions[$dimension])
+            && array_diff_key($focus, FlowQuery::filterLabels($dimensions)) === [],
+            422, 'The current Akvorado schema does not advertise this filter or grouping.');
+
         // Limit selector size. Selected port is resolved and authorized independently.
         $max = min(1500, max(20, (int) config('akvorado-flow.max_ports_in_selector', 1500)));
         $ports = $device->ports()->hasAccess(auth()->user())->where('ifIndex', '>', 0)
@@ -140,6 +143,8 @@ final class AkvoradoTab implements DeviceTab
             'period' => $minutes,
             'metric' => $metric,
             'dimension' => $dimension,
+            'dimensionOptions' => $dimensions,
+            'layer2Options' => $layer2Options,
             'focus' => $focus, 'bounds' => $bounds,
         ];
     }

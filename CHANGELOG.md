@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.24
+
+- Filter by IPv4 or IPv6 CIDR and add reported prefix, VLAN, and MAC grouping where the Console advertises those fields. VLAN and MAC filters appear for enabled schema fields.
+
 ## v0.7.23
 
 - Show exporter-wide unknown ingress and egress shares over time in Flow diagnostics, with exact bucket values and gaps for unavailable measurements.
