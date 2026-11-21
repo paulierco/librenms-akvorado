@@ -6,10 +6,13 @@ require __DIR__.'/../src/Services/FlowQuery.php';
 require __DIR__.'/../src/Services/FlowFormatter.php';
 require __DIR__.'/../src/Services/PortHealth.php';
 require __DIR__.'/../src/Services/FlowCoverage.php';
+require __DIR__.'/../src/Services/InvestigationView.php';
+require __DIR__.'/../src/Services/SankeyDiagram.php';
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowQuery;
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowFormatter;
 use LibreNMS\Plugins\AkvoradoFlow\Services\PortHealth;
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowCoverage;
+use LibreNMS\Plugins\AkvoradoFlow\Services\InvestigationView;
 
 function check(bool $ok, string $name): void { if (! $ok) {fwrite(STDERR, "FAIL $name\n"); exit(1);} echo "PASS $name\n"; }
 $now = new DateTimeImmutable('2026-11-20T12:00:00Z');
@@ -138,6 +141,22 @@ try {
 }
 $zoom=FlowQuery::bounds('1795172400','1795176000',1795176100);
 check($zoom !== null && $zoom['start']->getTimestamp()===1795172400 && $zoom['end']->getTimestamp()===1795176000, 'validated zoom bounds');
+$entered = FlowQuery::enteredBounds('2026-11-20T11:00:23', '2026-11-20T11:08', 1795176100);
+check($entered['start']->format(DATE_ATOM) === '2026-11-20T11:00:23+00:00'
+    && $entered['end']->format(DATE_ATOM) === '2026-11-20T11:08:00+00:00', 'manual UTC dates preserve exact seconds');
+foreach ([['2026-11-31T11:00', '2026-12-01T11:10'], ['2026-11-20T11:00', '2026-11-20T11:04'],
+    ['2026-11-20T11:00Z', '2026-11-20T11:20'], [null, '2026-11-20T11:20']] as [$start, $end]) {
+    try { FlowQuery::enteredBounds($start, $end, 1795176100); check(false, 'reject invalid manual dates'); }
+    catch (InvalidArgumentException) { check(true, 'reject invalid manual dates'); }
+}
+$saved = InvestigationView::query([
+    'section' => 'sankey', 'port' => '8', 'compare_port' => '9', 'period' => '360', 'host' => '192.0.2.10/24',
+    'sankey_view' => 'ports', 'sankey_paths' => 'unknown_ingress', 'compare' => 'previous',
+    'lag_members' => '1', 'redirect' => 'https://example.test/',
+], $entered);
+check($saved === ['section' => 'sankey', 'period' => 360, 'start' => 1795172423, 'end' => 1795172880, 'port' => 8,
+    'metric' => 'l3bps', 'dimension' => 'SrcAddr', 'host' => '192.0.2.0/24', 'compare' => 'previous', 'lag_members' => '1',
+    'sankey_view' => 'ports', 'sankey_paths' => 'unknown_ingress'], 'saved investigations keep the current scope and discard unrelated settings');
 $zoomed=FlowQuery::line('192.0.2.10','1/1/13',60,$zoom['end'],'l3bps','out',null,10,$focus,$zoom['start']);
 check($zoomed['start']==='2026-11-20T11:00:00Z' && $zoomed['end']==='2026-11-20T12:00:00Z'
     && str_contains($zoomed['filter'],'DstPort = 443'), 'zoomed line request preserves focus');

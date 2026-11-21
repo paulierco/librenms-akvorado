@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.26
+
+- Set exact UTC start and end times on the device tab and save named investigation views per LibreNMS user and device.
+
 ## v0.7.25
 
 - Compare two ports on the same device over one time window. Overlay their ingress and egress SNMP and Akvorado L2 rates and show traffic shares across matched buckets.

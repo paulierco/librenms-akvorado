@@ -166,6 +166,26 @@ final class FlowQuery
         ];
     }
 
+    public static function enteredBounds(mixed $start, mixed $end, int $now = 0): array
+    {
+        return self::bounds((string)self::utcTimestamp($start), (string)self::utcTimestamp($end), $now);
+    }
+
+    private static function utcTimestamp(mixed $value): int
+    {
+        if (! is_string($value) || ! preg_match('/\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(?::[0-9]{2})?\z/', $value)) {
+            throw new InvalidArgumentException('Enter both dates in UTC');
+        }
+        $value = strlen($value) === 16 ? $value.':00' : $value;
+        $format = 'Y-m-d\TH:i:s';
+        $time = \DateTimeImmutable::createFromFormat('!'.$format, $value, new \DateTimeZone('UTC'));
+        if ($time === false || $time->format($format) !== $value) {
+            throw new InvalidArgumentException('Invalid UTC calendar date');
+        }
+
+        return $time->getTimestamp();
+    }
+
     public static function window(int $minutes): int
     {
         return in_array($minutes, [60, 360, 1440, 10080], true) ? $minutes : 60;

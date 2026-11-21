@@ -241,6 +241,10 @@
         const sections=Array.from(root.querySelectorAll('[data-akv-section]'));
         function activate(section) {
             if(!['traffic','talkers','flows','health','sankey'].includes(section))section='traffic';
+            if(tabs.length){
+                const deviceTab=root.closest('[data-akv-device-tab]');
+                deviceTab?.querySelectorAll('[data-akv-current-section]').forEach(field=>{field.value=section;});
+            }
             tabs.forEach(tab=>{
                 tab.setAttribute('aria-selected',String(tab.dataset.akvTab===section));
             });
