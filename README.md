@@ -5,6 +5,7 @@ A read-only LibreNMS plugin for investigating flow telemetry collected by Akvora
 ## Features
 
 - Device and port traffic charts, top talkers, conversations, and filters for host IP, source or destination IP, protocol, and destination service port.
+- An optional previous-period overlay for the same device, port, and filters, plus the largest increases for conversations ranked in both windows.
 - A communications map with interface, IP, and service views. The interface view can show only known paths or only paths with unknown ingress, with the excluded bitrate share shown alongside the diagram.
 - Exporter diagnostics with query status, the latest nonzero flow bucket in the selected window, and the shares of observed L3 traffic with unknown ingress or egress.
 - Selected-port SNMP counter history aligned to the investigation window, including traffic, errors, and discards. Flow-to-counter coverage estimates are available for comparable L2 traffic queries.

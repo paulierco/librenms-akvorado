@@ -51,7 +51,12 @@
         const tooltip=container.querySelector('.akv-tooltip');
         const legend=root.querySelector('[data-akv-legend="'+name+'"]');
         const active=data.series.map(()=>true);
-        const series=data.series.map((s,i)=>({label:String(s.label),values:s.values.map(finite).slice(0,data.labels.length),color:colors[i%colors.length]}));
+        const series=data.series.map((s,i)=>({
+            label:String(s.label),
+            values:s.values.map(value=>s.previous && value===null ? null : finite(value)).slice(0,data.labels.length),
+            color:colors[i%colors.length],
+            previous:s.previous===true
+        }));
         let hover=-1;
         let dragStart=-1,dragEnd=-1;
         const timestamps = Array.isArray(data.timestamps) ? data.timestamps : [];
@@ -85,6 +90,18 @@
             const bottom=Array(n).fill(0);
             series.forEach((s,i)=>{
                 if (!active[i]) return;
+                if (s.previous) {
+                    ctx.beginPath();
+                    let drawing=false;
+                    s.values.forEach((value,j)=>{
+                        if(value===null){drawing=false;return;}
+                        const x=xAt(j,n,w),y=yAt(value);
+                        if(drawing)ctx.lineTo(x,y);else ctx.moveTo(x,y);
+                        drawing=true;
+                    });
+                    ctx.setLineDash([5,4]);ctx.strokeStyle=s.color;ctx.lineWidth=1.8;ctx.stroke();ctx.setLineDash([]);
+                    return;
+                }
                 const top=s.values.map((v,j)=>v+(stacked?bottom[j]||0:0));
                 const base=stacked?bottom:Array(n).fill(0);
                 ctx.beginPath();
@@ -158,7 +175,11 @@
             const rect=canvas.getBoundingClientRect(),w=rect.width;
             hover=pointerToIndex(e);
             const lines=[String(data.labels[hover])];
-            series.forEach((s,i)=>{if(active[i])lines.push(s.label+': '+niceNumber(s.values[hover]||0,data.unit));});
+            series.forEach((s,i)=>{
+                if(!active[i])return;
+                const value=s.values[hover];
+                lines.push(s.label+': '+(s.previous && value==null ? 'Unavailable' : niceNumber(value||0,data.unit)));
+            });
             tooltip.textContent=lines.join('\n');tooltip.style.display='block';
             tooltip.style.left=Math.min(w-190,Math.max(10,e.clientX-rect.left+12))+'px';
             tooltip.style.top=Math.max(8,e.clientY-rect.top-60)+'px';

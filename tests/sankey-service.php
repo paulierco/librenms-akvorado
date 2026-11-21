@@ -38,7 +38,7 @@ namespace LibreNMS\Plugins\AkvoradoFlow\Services {
                 'xps'=>[550000000], 'axis'=>[1]];
         }
     }
-    foreach (['FlowDiagnostics','FlowQuery','FlowFormatter','SankeyDiagram','PortHealth','FlowCoverage','SnmpHistory','FlowAvailability','LagMembers','TrafficService'] as $file) {
+    foreach (['FlowDiagnostics','PeriodComparison','FlowQuery','FlowFormatter','SankeyDiagram','PortHealth','FlowCoverage','SnmpHistory','FlowAvailability','LagMembers','TrafficService'] as $file) {
         require __DIR__.'/../src/Services/'.$file.'.php';
     }
     function config(string $key,mixed $default=null):mixed { return match($key) {
@@ -155,5 +155,47 @@ namespace LibreNMS\Plugins\AkvoradoFlow\Services {
         && $diagnostics->forDevice((object) ['unmapped' => true], 60, $bounds)['state'] === 'unmapped',
         'diagnostics distinguish a failed query from an unmapped device');
 
-    echo "All Sankey and flow diagnostics tests passed.\n";
+    Cache::$stored = [];
+    $comparisonClient = new AkvoradoClient();
+    $comparisonClient->respond = static function (array $query): array {
+        $prior = $query['start'] === '2026-11-20T10:30:00Z';
+        if (isset($query['points'])) {
+            $start = new \DateTimeImmutable($query['start']);
+            return [
+                't' => array_map(static fn ($seconds) => $start->modify('+'.$seconds.' seconds')->format(DATE_ATOM), [0, 60, 120, 180]),
+                'points' => [[$prior ? 10 : 12, 20, 30, 0]],
+                'rows' => [[]],
+            ];
+        }
+        return ['rows' => [['192.0.2.44','198.51.100.22'], ['Other','Other']], 'xps' => [$prior ? 80 : 110, 1000]];
+    };
+    $comparisonService = new TrafficService(new ExporterResolver(), $comparisonClient);
+    $focus = ['host' => '192.0.2.44'];
+    $without = $comparisonService->panel($device, $port, 60, 'l3bps', 'SrcAddr', $focus, $bounds);
+    $baselineCalls = count($comparisonClient->requests);
+    assertResult(! isset($without['periodComparison']), 'previous-period queries are opt in');
+    $with = $comparisonService->panel($device, $port, 60, 'l3bps', 'SrcAddr', $focus, $bounds, null, false, true);
+    $comparison = $with['periodComparison'];
+    assertResult($comparison['start'] === '2026-11-20 10:30:00'
+        && $comparison['end'] === '2026-11-20 11:00:00'
+        && array_column($comparison['series'], 'label') === ['Previous ingress', 'Previous egress']
+        && $comparison['series'][0]['values'] === [10.0, 20.0],
+        'previous port series align with the current time buckets');
+    assertResult(count($comparison['increases']) === 1 && $comparison['increases'][0]['increaseBps'] === 30.0,
+        'comparison ranks increases only for concrete pairs present in both responses');
+    assertResult(count($comparisonClient->requests) === $baselineCalls + 3 && $with['queryArgs']['compare'] === 'previous',
+        'previous port comparison adds two series requests and one ranked request');
+    foreach (array_slice($comparisonClient->requests, $baselineCalls) as [$endpoint, $query]) {
+        assertResult($query['start'] === '2026-11-20T10:30:00Z' && $query['end'] === '2026-11-20T11:00:00Z'
+            && str_contains($query['filter'], 'ExporterAddress = 192.0.2.12')
+            && str_contains($query['filter'], '1/1/1')
+            && str_contains($query['filter'], '(SrcAddr = 192.0.2.44 OR DstAddr = 192.0.2.44)'),
+            'previous requests preserve the exact selected duration and scoped filters');
+    }
+    $comparisonService->panel($device, $port, 60, 'l3bps', 'SrcAddr', $focus, $bounds, null, false, true);
+    assertResult(count($comparisonClient->requests) === $baselineCalls + 3, 'comparison reuses its own cache');
+    assertResult(PeriodComparison::align([1300, 1360, 1420], ['timestamps'=>[1000,1060,1180], 'samples'=>[5.0,0.0,8.0]], 300, 1000, 1300)
+        === [5.0, 0.0, null], 'a missing prior bucket stays unavailable rather than becoming zero');
+
+    echo "All Sankey, flow diagnostics and comparison tests passed.\n";
 }
