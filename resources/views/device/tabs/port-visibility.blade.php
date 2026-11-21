@@ -77,15 +77,14 @@
                             @endforeach
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="text-muted">No ports are available on this page.</td></tr>
+                        <tr><td colspan="7" class="text-muted">No ports are available for this device.</td></tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
-        @if($ports->firstItem() !== null)
-            <p class="text-muted">Showing ports {{ $ports->firstItem() }}–{{ $ports->lastItem() }}.</p>
+        @if($ports->isNotEmpty())
+            <p class="text-muted">Showing all {{ $ports->count() }} ports.</p>
         @endif
-        {{ $ports->withPath(route('device.akvorado', ['device' => $device->device_id]))->appends(['section' => 'port-visibility'] + $window)->links() }}
         <p class="text-muted">SNMP rates reflect the latest poll. Flow visibility reflects named samples in the window above. Quiet traffic, sampling, and missing interface names can all produce a Not observed result.</p>
     </div>
 </div>

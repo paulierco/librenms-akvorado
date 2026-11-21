@@ -22,13 +22,13 @@ final class PortVisibility
     public function forDevice(Device $device, User $viewer, int $minutes, ?array $bounds): array
     {
         $ports = $device->ports()->hasAccess($viewer)->where('deleted', 0)
-            ->orderBy('ifName')->orderBy('port_id')->simplePaginate(25, [
+            ->orderBy('ifName')->orderBy('port_id')->get([
                 'port_id', 'ifIndex', 'ifName', 'ifDescr', 'ifAlias', 'poll_time', 'ifInOctets_rate', 'ifOutOctets_rate',
             ]);
-        $names = $ports->getCollection()->pluck('ifName')->uniqueStrict()
+        $names = $ports->pluck('ifName')->uniqueStrict()
             ->filter(static fn ($name) => FlowQuery::validInterfaceName($name) && $name !== 'Other')->values()->all();
         // An enriched ifName cannot distinguish two ports sharing a name on the same exporter.
-        $duplicates = $names === [] ? [] : $device->ports()->where('deleted', 0)->whereIn('ifName', $names)
+        $duplicates = $names === [] ? [] : $device->ports()->where('deleted', 0)
             ->pluck('ifName')->countBy()->filter(static fn (int $count) => $count > 1)->keys()->all();
         $names = array_values(array_diff($names, $duplicates));
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
@@ -54,25 +54,36 @@ final class PortVisibility
 
     private function observe(string $ip, array $names, DateTimeImmutable $start, DateTimeImmutable $end): array
     {
-        $key = 'akvorado-port-visibility-v1:'.hash('sha256', json_encode([
-            config('akvorado-flow.url'), $ip, $names, $start->getTimestamp(), $end->getTimestamp(),
-        ], JSON_THROW_ON_ERROR));
-        return Cache::remember($key, (int)config('akvorado-flow.cache_seconds', 60),
-            function () use ($ip, $names, $start, $end): array {
-                $observations = [];
-                foreach (['ingress', 'egress'] as $direction) {
-                    try {
-                        $query = FlowQuery::interfaceVisibility($ip, $names, $direction, $start, $end);
-                        $observations[$direction] = self::reported($this->client->post('graph/line', $query), $names);
-                    } catch (\Throwable $e) {
-                        $observations[$direction] = [];
-                        Log::warning('Akvorado plugin: port visibility check failed', [
-                            'direction' => $direction, 'exception_type' => get_class($e),
-                        ]);
-                    }
+        $observations = ['ingress' => [], 'egress' => []];
+        // Cap time spent starting requests so an unresponsive collector cannot hide the SNMP table.
+        $deadline = hrtime(true) + 8_000_000_000;
+        foreach (array_chunk($names, 25) as $batch) {
+            foreach (array_keys($observations) as $direction) {
+                if (hrtime(true) >= $deadline) {
+                    return $observations;
                 }
-                return $observations;
-            });
+                $observations[$direction] += $this->observeDirection($ip, $batch, $direction, $start, $end);
+            }
+        }
+
+        return $observations;
+    }
+
+    private function observeDirection(string $ip, array $names, string $direction, DateTimeImmutable $start, DateTimeImmutable $end): array
+    {
+        try {
+            $query = FlowQuery::interfaceVisibility($ip, $names, $direction, $start, $end);
+            $key = 'akvorado-port-visibility-v2:'.hash('sha256', json_encode([
+                config('akvorado-flow.url'), $query,
+            ], JSON_THROW_ON_ERROR));
+            return Cache::remember($key, (int)config('akvorado-flow.cache_seconds', 60),
+                fn (): array => self::reported($this->client->post('graph/line', $query), $names));
+        } catch (\Throwable $e) {
+            Log::warning('Akvorado plugin: port visibility check failed', [
+                'direction' => $direction, 'exception_type' => get_class($e),
+            ]);
+            return [];
+        }
     }
 
     /** @return array<string,bool> Only confirmed observations and confirmed empty results. */

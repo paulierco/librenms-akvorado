@@ -9,7 +9,7 @@ A read-only LibreNMS plugin for investigating flow telemetry collected by Akvora
 - A communications map with interface, IP, and service views. The interface view can show only known paths or only paths with unknown ingress, with the excluded bitrate share shown alongside the diagram.
 - Fixed-time incident links that preserve the investigation filters. An optional link opens Akvorado Visualize with the same time window and flow filter.
 - Exporter diagnostics with query status, the latest nonzero flow bucket in the selected window, and the shares of observed L3 traffic with unknown ingress or egress.
-- A paginated port visibility table with each port’s latest SNMP rates and named ingress and egress observations in the selected window.
+- An all-ports visibility table with each port’s latest SNMP rates and named ingress and egress observations in the selected window.
 - Selected-port SNMP counter history aligned to the investigation window, including traffic, errors, and discards. Flow-to-counter coverage estimates are available for comparable L2 traffic queries.
 - A paginated exporter inventory and an optional API for supplying LibreNMS interface metadata to Akvorado.
 
@@ -56,7 +56,7 @@ Enable AKVORADO_FLOW_SHOW_LINK to open the scoped window directly in Akvorado Vi
 
 ## Check port visibility
 
-Open **Port visibility** from the device’s Akvorado tab to review 25 ports at a time. The table shows the latest LibreNMS SNMP rates and whether Akvorado reported each exact interface name in ingress and egress during the displayed window. Select a port name to investigate it over the same window.
+Open **Port visibility** from the device’s Akvorado tab to see all ports on one page. The table shows the latest LibreNMS SNMP rates and whether Akvorado reported each exact interface name in ingress and egress during the displayed window. Select a port name to investigate it over the same window.
 
 A **Not observed** result can reflect quiet traffic, sampling, or a missing interface name. **Unavailable** indicates that the response did not establish visibility for that direction. Ambiguous interface names are indicated separately.
 
