@@ -53,6 +53,16 @@ Use **Copy incident link** on the Akvorado tab to share the time window shown on
 
 Enable AKVORADO_FLOW_SHOW_LINK to open the scoped window directly in Akvorado Visualize. The configured Console URL must be reachable by the user's browser. The scoped link uses Akvorado's v1 visualization URL format, verified with v2026.10.1.
 
+## Investigate from a port alert
+
+Within the fault loop of a LibreNMS alert template, include the investigation link for each affected port:
+
+~~~blade
+@includeIf('akvorado-flow::alerts.port-investigation', ['alert' => $alert, 'fault' => $value, 'html' => true])
+~~~
+
+Use false for a plain-text template. The link uses the configured LibreNMS base URL and the existing device and port permissions. It opens the Akvorado tab 15 minutes before the alert through 15 minutes after it, ending at the current time for a recent alert. The previous-period comparison opens automatically. The alert must include a port ID, and the window must fit within the existing fixed-window lookback.
+
 ## Understand the results
 
 - Akvorado reports sampled flow observations. An interface name can be empty because the exporter omitted the interface index or because enrichment could not resolve it. The diagnostic shares use all observed exporter traffic in the selected window. The map’s shares use the ranked paths displayed in that view.
