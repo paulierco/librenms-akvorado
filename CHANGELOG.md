@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.20
+
+- Show all device ports on a single visibility page. Keep collector requests batched and preserve SNMP rows when flow checks are unavailable.
+
+## v0.7.19
+
+- Added a per-device port visibility table with latest SNMP rates and separate ingress and egress observations.
+
 ## v0.7.18
 
 - Link from port alert templates to the affected LibreNMS port and a window around the alert with previous-period comparison enabled.

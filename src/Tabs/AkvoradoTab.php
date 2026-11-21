@@ -11,6 +11,7 @@ use LibreNMS\Interfaces\UI\DeviceTab;
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowDiagnostics;
 use LibreNMS\Plugins\AkvoradoFlow\Services\FlowQuery;
 use LibreNMS\Plugins\AkvoradoFlow\Services\PortAlertInvestigation;
+use LibreNMS\Plugins\AkvoradoFlow\Services\PortVisibility;
 use LibreNMS\Plugins\AkvoradoFlow\Services\TrafficService;
 
 final class AkvoradoTab implements DeviceTab
@@ -62,6 +63,15 @@ final class AkvoradoTab implements DeviceTab
         if ($request->query('section') === 'diagnostics') {
             return [
                 'diagnostics' => app(FlowDiagnostics::class)->forDevice($device, $minutes, $bounds),
+                'exporterReady' => false,
+                'period' => $minutes,
+                'bounds' => $bounds,
+            ];
+        }
+
+        if ($request->query('section') === 'port-visibility') {
+            return [
+                'visibility' => app(PortVisibility::class)->forDevice($device, auth()->user(), $minutes, $bounds),
                 'exporterReady' => false,
                 'period' => $minutes,
                 'bounds' => $bounds,
