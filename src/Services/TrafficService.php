@@ -350,6 +350,8 @@ final class TrafficService
             $data['zoomEnd'] = $isZoomed ? $now->getTimestamp() : null;
             $data['focus'] = $focus;
             $data['filterExpression'] = FlowQuery::filter($exporter['ip'], $interfaceScope, 'both', $focus);
+            $data['windowStart'] = ($start ?? $now->modify('-'.$minutes.' minutes'))->getTimestamp();
+            $data['windowEnd'] = $now->getTimestamp();
             $data['lagMembers'] = $lagMembers;
             $data['lagIncluded'] = $lagIncluded;
             $data['queryArgs'] = array_merge([

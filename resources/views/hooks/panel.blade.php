@@ -203,6 +203,9 @@
             </div>
         </div>
         @if($isValid)
+            @if($canDrill && isset($panel['windowStart'], $panel['windowEnd']))
+                @include('akvorado-flow::hooks.incident-sharing')
+            @endif
             <span class="akv-pill">● Akvorado API reachable</span>
             @if($flowState === 'has_flows')<span class="akv-pill">● Flow data observed</span>@endif
         @endif
@@ -421,7 +424,6 @@
                         </div>
                     </div>
                 @endif
-                @if(config('akvorado-flow.show_direct_link', false))<p style="margin-top:14px"><a href="{{ config('akvorado-flow.url') }}" rel="noopener noreferrer" target="_blank" class="btn btn-default btn-sm">Open Akvorado</a></p>@endif
             </div>
 
             @include('akvorado-flow::hooks.snmp-history', ['panel' => $panel])
