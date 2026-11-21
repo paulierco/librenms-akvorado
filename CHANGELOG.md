@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.28
+
+- Show an hourly traffic heatmap for a device or selected port over the last 1, 7, 14, or 28 days or a fixed UTC window.
+
 ## v0.7.27
 
 - Download incident CSVs for conversations, detailed flows, previous-period changes, filtered map paths, and two-port comparisons. Include UTC time bounds, units, and ranking limits.

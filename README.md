@@ -68,6 +68,12 @@ Saved views use LibreNMS’s existing user preferences table. Complete the norma
 
 Download the CSV beside a conversations table, previous-period comparison, communications map, or port comparison. The file records the fixed UTC window, selected scope, numeric rate units, and any ranking limits. Map exports keep the selected path filter. Port comparisons include matched averages and time buckets, with blank cells for unavailable readings. An empty result contains the investigation context and a \`no_rows\` status.
 
+## Find recurring traffic with the heatmap
+
+Open **Traffic heatmap** in a device’s Akvorado tab. Each row is a UTC date and each cell shows the average sampled L3 bitrate for a complete hour. Choose a device-wide or selected-port scope, or narrow a port to ingress or egress. Presets range from 24 hours to 28 days. Custom ranges and saved views also work with the heatmap.
+
+Hover over a cell to see its average and peak collector bucket. Select an active hour within the last eight days to open its traffic investigation. The grid distinguishes unavailable measurements from periods with no sampled traffic. Sample availability depends on Akvorado’s retained data.
+
 ## Compare historical SNMP and flow traffic
 
 Select a port on the Akvorado device tab and open **Historical overlay**. Separate ingress and egress charts compare the latest selected window using the same time intervals in bits per second. The view reads LibreNMS RRD history and compares it with Akvorado L2 estimates for the selected port’s full traffic. Akvorado’s zero values are estimates with no matching sampled traffic. Missing readings and partially covered intervals remain gaps. Expand the values table to inspect a bucket.

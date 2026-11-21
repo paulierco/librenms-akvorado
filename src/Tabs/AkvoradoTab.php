@@ -16,6 +16,7 @@ use LibreNMS\Plugins\AkvoradoFlow\Services\PortAlertInvestigation;
 use LibreNMS\Plugins\AkvoradoFlow\Services\PortTrafficHistory;
 use LibreNMS\Plugins\AkvoradoFlow\Services\PortVisibility;
 use LibreNMS\Plugins\AkvoradoFlow\Services\SavedInvestigationViews;
+use LibreNMS\Plugins\AkvoradoFlow\Services\TrafficHeatmap;
 use LibreNMS\Plugins\AkvoradoFlow\Services\TrafficService;
 
 final class AkvoradoTab implements DeviceTab
@@ -37,6 +38,8 @@ final class AkvoradoTab implements DeviceTab
             'section' => $request->query('section'), 'period' => $data['period'],
             'port' => $data['selectedPort']->port_id ?? null,
             'compare_port' => $data['portComparison']['second']->port_id ?? null,
+            'heatmap_days' => $data['trafficHeatmap']['lookback'] ?? null,
+            'heatmap_direction' => $data['trafficHeatmap']['direction'] ?? null,
             'compare' => $request->query('compare'), 'lag_members' => $request->query('lag_members'),
             'sankey_view' => $request->query('sankey_view'), 'sankey_paths' => $request->query('sankey_paths'),
             'metric' => $data['metric'] ?? null, 'dimension' => $data['dimension'] ?? null,
@@ -56,6 +59,9 @@ final class AkvoradoTab implements DeviceTab
         $section = $request->query('section');
         $lookback = $request->query('comparison_lookback');
         $rollingComparison = $section === 'port-comparison' && is_string($lookback) && ctype_digit($lookback);
+        $heatmapLookback = $request->query('heatmap_lookback');
+        $rollingHeatmap = $section === 'traffic-heatmap' && is_string($heatmapLookback) && isset(TrafficHeatmap::LOOKBACKS[$heatmapLookback]);
+        $rolling = $rollingComparison || $rollingHeatmap;
         $period = $rollingComparison ? $lookback : $request->query('period', (string) config('akvorado-flow.window_minutes', 60));
         $minutes = FlowQuery::window(is_scalar($period) ? (int) $period : 60);
         $metric = FlowQuery::metric(is_string($request->query('metric')) ? $request->query('metric') : 'l3bps');
@@ -63,11 +69,11 @@ final class AkvoradoTab implements DeviceTab
         // Only narrow validated fields reach Akvorado; malformed user filters are rejected.
         try {
             $focus = FlowQuery::focus($request->query());
-            $bounds = $rollingComparison ? null : FlowQuery::bounds($request->query('start'), $request->query('end'));
-            if (! $rollingComparison && ($request->has('range_start') || $request->has('range_end'))) {
+            $bounds = $rolling ? null : FlowQuery::bounds($request->query('start'), $request->query('end'));
+            if (! $rolling && ($request->has('range_start') || $request->has('range_end'))) {
                 $bounds = FlowQuery::enteredBounds($request->query('range_start'), $request->query('range_end'));
             }
-            if (! $rollingComparison && $bounds === null && $request->query('alert_at') !== null) {
+            if (! $rolling && $bounds === null && $request->query('alert_at') !== null) {
                 if ($port === null) {
                     throw new \InvalidArgumentException('An alert investigation requires a port');
                 }
@@ -80,6 +86,24 @@ final class AkvoradoTab implements DeviceTab
             return [
                 'diagnostics' => app(FlowDiagnostics::class)->forDevice($device, $minutes, $bounds),
                 'exporterReady' => false,
+                'period' => $minutes,
+                'bounds' => $bounds,
+            ];
+        }
+
+        if ($section === 'traffic-heatmap') {
+            $days = TrafficHeatmap::lookback($rollingHeatmap ? $heatmapLookback : $request->query('heatmap_days'));
+            $direction = $port === null ? 'both' : TrafficHeatmap::direction($request->query('heatmap_direction'));
+            $ports = $device->ports()->hasAccess(auth()->user())->orderBy('ifName')->orderBy('port_id')
+                ->get(['port_id', 'ifIndex', 'ifName', 'ifDescr', 'ifAlias']);
+
+            return [
+                'trafficHeatmap' => [
+                    'history' => app(TrafficHeatmap::class)->forScope($device, $port, $days, $direction, $bounds),
+                    'lookback' => $days, 'direction' => $direction, 'ports' => $ports,
+                ],
+                'exporterReady' => false,
+                'selectedPort' => $port,
                 'period' => $minutes,
                 'bounds' => $bounds,
             ];

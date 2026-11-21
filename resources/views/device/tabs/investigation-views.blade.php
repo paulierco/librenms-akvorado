@@ -1,8 +1,10 @@
 @php
     $settings = $data['viewSettings'];
     $fixed = isset($settings['start'], $settings['end']);
-    $end = $settings['end'] ?? $data['panel']['windowEnd'] ?? intdiv(time(), 60) * 60;
-    $start = $settings['start'] ?? $data['panel']['windowStart'] ?? $end - $settings['period'] * 60;
+    $heatmap = $data['trafficHeatmap']['history'] ?? [];
+    $end = $settings['end'] ?? $data['panel']['windowEnd'] ?? $heatmap['end'] ?? intdiv(time(), 60) * 60;
+    $start = $settings['start'] ?? $data['panel']['windowStart']
+        ?? (isset($heatmap['start']) && $heatmap['start'] < $end ? max($heatmap['start'], $end - 604800) : $end - $settings['period'] * 60);
     $messages = $errors->getBag('akvoradoSavedView');
 @endphp
 <details style="margin-bottom:10px">
